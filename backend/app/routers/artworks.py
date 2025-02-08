@@ -182,10 +182,34 @@ async def get_nearby_artworks(
     radius: float = 5.0,
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(models.Artwork)
+    # Use selectinload to load categories relationship
+    query = select(models.Artwork).options(selectinload(models.Artwork.categories))
     result = await db.execute(query)
     artworks = result.scalars().all()
-    return artworks
+    
+    # Filter artworks within radius
+    nearby_artworks = [
+        artwork for artwork in artworks
+        if calculate_distance(latitude, longitude, artwork.latitude, artwork.longitude) <= radius
+    ]
+    
+    # Return with all fields intact
+    return [
+        {
+            "id": artwork.id,
+            "title": artwork.title,
+            "description": artwork.description,
+            "image_url": artwork.image_url,
+            "latitude": artwork.latitude,
+            "longitude": artwork.longitude,
+            "artist_id": artwork.artist_id,
+            "status": artwork.status,
+            "is_featured": artwork.is_featured,
+            "created_at": artwork.created_at,
+            "categories": [c.name for c in artwork.categories]
+        }
+        for artwork in nearby_artworks
+    ]
 
 @router.get("/", response_model=List[schemas.ArtworkResponse])
 async def get_artworks(

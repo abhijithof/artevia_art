@@ -6,7 +6,6 @@ class Artwork {
   final double latitude;
   final double longitude;
   final String artistId;
-  final DateTime createdAt;
 
   Artwork({
     required this.id,
@@ -16,7 +15,6 @@ class Artwork {
     required this.latitude,
     required this.longitude,
     required this.artistId,
-    required this.createdAt,
   });
 
   factory Artwork.fromJson(Map<String, dynamic> json) {
@@ -28,7 +26,6 @@ class Artwork {
       latitude: json['latitude'],
       longitude: json['longitude'],
       artistId: json['artist_id'],
-      createdAt: DateTime.parse(json['created_at']),
     );
   }
 } 
