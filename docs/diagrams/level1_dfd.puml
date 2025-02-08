@@ -1,0 +1,23 @@
+@startuml Level 1 - Main Processes
+!theme plain
+skinparam roundCorner 15
+skinparam backgroundColor transparent
+
+actor User
+rectangle "Authentication System" as Auth
+rectangle "Map System" as Map
+rectangle "Artwork Management" as Art
+database "Database" as DB
+
+User -right-> Auth : Login
+Auth -left-> User : Token
+User -right-> Map : View Map
+Map -left-> User : Location Data
+User -right-> Art : Upload/View Art
+Art -left-> User : Artwork Data
+
+Auth <--> DB : User Data
+Map <--> DB : Location/Art Data
+Art <--> DB : Artwork Info
+
+@enduml

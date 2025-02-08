@@ -1,0 +1,12 @@
+@startuml Level 0 - Context Diagram
+!theme plain
+skinparam roundCorner 15
+skinparam backgroundColor transparent
+
+actor User
+rectangle "Artevia System" as System
+
+User -right-> System : Login/View/Upload Art
+System -left-> User : Art/Location Data
+
+@enduml

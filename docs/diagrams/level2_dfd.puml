@@ -1,0 +1,37 @@
+@startuml Level 2 - Detailed Processes
+!theme plain
+skinparam roundCorner 15
+skinparam backgroundColor transparent
+
+actor User
+rectangle "Login Process" as Login
+rectangle "Token Management" as Token
+database "User Database" as UserDB
+rectangle "Location Service" as Location
+rectangle "Map View" as MapView
+rectangle "Distance Calculator" as Distance
+rectangle "Upload Artwork" as Upload
+rectangle "View Artwork" as View
+database "Artwork Database" as ArtDB
+
+User -right-> Login : Credentials
+Login -right-> UserDB : Verify
+Login -down-> Token : Generate
+Token -left-> User : Access Token
+
+User -right-> Location : Request Location
+Location -right-> MapView : Coordinates
+MapView -left-> User : Show Artworks
+User -right-> Distance : Set Distance
+Distance -right-> MapView : Filter
+
+User -down-> Upload : Upload Art
+Upload -right-> ArtDB : Store
+User -down-> View : View Art
+View -right-> ArtDB : Fetch
+View -up-> User : Display
+
+MapView <--> ArtDB : Query Art
+Distance <--> ArtDB : Filter Data
+
+@enduml
