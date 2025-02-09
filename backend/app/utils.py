@@ -36,20 +36,18 @@ async def save_image(file: UploadFile) -> str:
     return f"/images/{filename}"
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance between two points in kilometers"""
-    # Approximate radius of earth in km
-    R = 6371.0
-
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    """Calculate distance between two points in kilometers using the Haversine formula"""
+    R = 6371  # Earth's radius in kilometers
     
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
     
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * atan2(sqrt(a), sqrt(1-a))
     distance = R * c
-
-    return distance 
+    
+    return distance
 
 class PaginationParams:
     def __init__(

@@ -6,25 +6,31 @@ class ArtworkService {
 
   ArtworkService(this._dio);
 
-  Future<List<Artwork>> getNearbyArtworks(double latitude, double longitude) async {
+  Future<List<Artwork>> getNearbyArtworks(double latitude, double longitude, {double radius = 5.0}) async {
     try {
+      print('Fetching artworks at: $latitude, $longitude');
+      
       final response = await _dio.get(
         '/artworks/nearby',
         queryParameters: {
           'latitude': latitude,
           'longitude': longitude,
-          'radius': 5.0,
+          'radius': radius,
         },
       );
 
-      if (response.statusCode == 200 && response.data != null) {
-        return (response.data as List)
-            .map((json) => Artwork.fromJson(json))
-            .toList();
+      print('Response status: ${response.statusCode}');
+      print('Response data: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> artworksJson = response.data;
+        return artworksJson.map((json) => Artwork.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load artworks: ${response.statusCode}');
       }
-      return [];
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error getting nearby artworks: $e');
+      print('Stack trace: $stackTrace');
       return [];
     }
   }

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from typing import List
 from .. import models, schemas
 from ..database import get_db
-from ..auth.utils import get_current_user
+from ..auth.auth import get_current_user, get_password_hash
 
 router = APIRouter(
     prefix="/users",
@@ -24,11 +24,14 @@ async def create_user(user: schemas.UserCreate, db: AsyncSession = Depends(get_d
     if db_user:
         raise HTTPException(status_code=400, detail="Email or username already registered")
 
+    # Hash the password
+    hashed_password = get_password_hash(user.password)
+    
     db_user = models.User(
         email=user.email,
         username=user.username,
-        password=user.password,
-        role="user"
+        password=hashed_password,  # Store hashed password
+        role=user.role if hasattr(user, 'role') else "user"
     )
     
     db.add(db_user)
@@ -48,7 +51,7 @@ def read_users(
     return users
 
 @router.get("/me", response_model=schemas.User)
-async def read_user_me(current_user: models.User = Depends(get_current_user)):
+async def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 @router.get("/{user_id}", response_model=schemas.User)

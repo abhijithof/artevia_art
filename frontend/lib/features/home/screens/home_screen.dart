@@ -99,14 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       point: LatLng(artwork.latitude, artwork.longitude),
                       width: 80,
                       height: 80,
-                      child: GestureDetector(
-                        onTap: () => _showArtworkDetails(artwork),
-                        child: const Icon(
-                          Icons.art_track,
-                          color: Colors.red,
-                          size: 40,
-                        ),
-                      ),
+                      child: _buildArtworkMarker(artwork),
                     ),
                   ),
             ],
@@ -137,6 +130,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showArtworkDetails(Artwork artwork) {
-    // TODO: Show artwork details modal
+    final artworkProvider = context.read<ArtworkProvider>();
+    final isDiscovered = artworkProvider.isArtworkDiscovered(artwork.id);
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              artwork.title,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(artwork.description),
+            const SizedBox(height: 16),
+            if (!isDiscovered)
+              ElevatedButton(
+                onPressed: () async {
+                  final success = await artworkProvider.discoverArtwork(artwork.id);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success ? 'Artwork discovered!' : 'Failed to discover artwork',
+                        ),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('Discover Artwork'),
+              ),
+            if (isDiscovered)
+              const Chip(
+                label: Text('Discovered'),
+                backgroundColor: Colors.green,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArtworkMarker(Artwork artwork) {
+    final isDiscovered = context.watch<ArtworkProvider>().isArtworkDiscovered(artwork.id);
+    return GestureDetector(
+      onTap: () => _showArtworkDetails(artwork),
+      child: Icon(
+        Icons.art_track,
+        color: isDiscovered ? Colors.green : Colors.red,
+        size: 40,
+      ),
+    );
   }
 }

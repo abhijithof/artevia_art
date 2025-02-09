@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 from . import models
-from .database import engine, get_db, Base
+from .database import engine, get_db, Base, init_db
 from .routers import users, auth, artworks, social, discoveries, categories, admin, profiles
 
 # Initialize FastAPI app
@@ -42,7 +42,7 @@ async def create_tables():
 # Create startup event to create tables
 @app.on_event("startup")
 async def startup_event():
-    await create_tables()
+    await init_db()
 
 # Basic test route
 @app.get("/")

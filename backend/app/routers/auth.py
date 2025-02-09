@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from .. import models
 from ..database import get_db
-from ..auth.utils import create_access_token
+from ..auth.auth import verify_password, create_access_token
 
 # Create router with prefix to match the token URL
 router = APIRouter(prefix="/auth", tags=["auth"])  # Add prefix here
@@ -21,15 +21,8 @@ async def login(
         result = await db.execute(query)
         user = result.scalar_one_or_none()
 
-        if not user:
-            print("User not found")  # Debug print
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
-            )
-
-        if user.password != form_data.password:
-            print("Password mismatch")  # Debug print
+        if not user or not verify_password(form_data.password, user.password):
+            print("User not found or password mismatch")  # Debug print
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
