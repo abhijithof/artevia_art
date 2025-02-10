@@ -33,43 +33,4 @@ class ArtworkService {
       rethrow;
     }
   }
-
-  Future<bool> markArtworkAsDiscovered(int artworkId) async {
-    try {
-      final response = await _dio.post('/discoveries/$artworkId');
-      return response.statusCode == 200;
-    } catch (e) {
-      print('Error marking artwork as discovered: $e');
-      return false;
-    }
-  }
-
-  Future<void> unlockArtwork(int artworkId, double latitude, double longitude) async {
-    try {
-      if (authToken == null) {
-        throw Exception('Not authenticated');
-      }
-
-      final response = await _dio.post(
-        '/discoveries/artworks/$artworkId/unlock',
-        queryParameters: {
-          'latitude': latitude,
-          'longitude': longitude,
-        },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $authToken',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception(response.data['detail'] ?? 'Failed to unlock artwork');
-      }
-    } catch (e) {
-      print('Error unlocking artwork: $e');
-      rethrow;
-    }
-  }
 } 

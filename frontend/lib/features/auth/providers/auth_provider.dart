@@ -8,28 +8,37 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   String? _token;
   bool _isLoading = false;
+  String? _error;
 
   User? get user => _user;
   String? get token => _token;
   bool get isLoading => _isLoading;
+  String? get error => _error;
   bool get isAuthenticated => _token != null;
 
   Future<void> login(String email, String password) async {
-    _isLoading = true;
-    notifyListeners();
-
     try {
-      _token = await _authService.login(email, password);
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      _token = await AuthService.login(email, password);
+      print('Login successful, token: $_token');
+      
       _user = await _authService.getCurrentUser(_token!);
       await _saveToken(_token!);
+      _isLoading = false;
+      _error = null;  // Clear any previous errors
       notifyListeners();
     } catch (e) {
+      print('Error in login: $e');
       _token = null;
       _user = null;
-      rethrow;
-    } finally {
+      _error = e.toString().replaceAll('Exception: ', '');
       _isLoading = false;
+      await _removeToken();
       notifyListeners();
+      rethrow;
     }
   }
 
@@ -46,10 +55,10 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() async {
+  void logout() {
     _token = null;
     _user = null;
-    await _removeToken();
+    _error = null;
     notifyListeners();
   }
 

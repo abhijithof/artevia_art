@@ -1,40 +1,48 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/user_model.dart';
 
 class AuthService {
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: 'http://127.0.0.1:8000',  // Make sure this matches your backend port
-    validateStatus: (status) => true,  // For debugging
+  static final _dio = Dio(BaseOptions(
+    baseUrl: kIsWeb 
+        ? 'http://localhost:8000'  // For web
+        : 'http://10.0.2.2:8000',  // For Android emulator
+    validateStatus: (status) => true,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
   ));
 
-  Future<String> login(String email, String password) async {
+  static Future<String> login(String email, String password) async {
     try {
-      print('Attempting login for: $email'); // Debug print
-
-      final formData = FormData.fromMap({
-        'username': email,
-        'password': password,
-      });
-
-      print('Sending login request...'); // Debug print
+      print('Attempting login for: $email');
+      
       final response = await _dio.post(
-        '/auth/token',
-        data: formData,
+        '/auth/token',  // Changed from /auth/login to /auth/token
+        data: {
+          'username': email,
+          'password': password,
+          'grant_type': 'password',  // Add this
+        },
         options: Options(
-          contentType: 'application/x-www-form-urlencoded',
-          followRedirects: false,
-          validateStatus: (status) => true,
+          contentType: 'application/x-www-form-urlencoded',  // Add this
+          headers: {
+            'Accept': 'application/json',
+          },
         ),
       );
-      print('Login response: ${response.data}'); // Debug print
 
-      if (response.statusCode == 200) {
+      print('Login response status: ${response.statusCode}');
+      print('Login response data: ${response.data}');
+
+      if (response.statusCode == 200 && response.data['access_token'] != null) {
         return response.data['access_token'];
-      } else {
-        throw Exception('Login failed: ${response.statusCode} - ${response.data}');
       }
+      
+      throw Exception(response.data['detail'] ?? 'Login failed');
     } catch (e) {
-      print('Login error: $e'); // Debug print
+      print('Login error: $e');
       rethrow;
     }
   }

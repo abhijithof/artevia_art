@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 from . import models
-from .database import engine, get_db, Base, init_db
+from .database import engine, get_db, Base
 from .routers import users, auth, artworks, social, discoveries, categories, admin, profiles
 
 # Initialize FastAPI app
@@ -15,7 +15,7 @@ app = FastAPI(title="Artevia API")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:63907", "http://localhost:3000"],  # Add your Flutter web port
+    allow_origins=["*"],  # For development only
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,7 +42,7 @@ async def create_tables():
 # Create startup event to create tables
 @app.on_event("startup")
 async def startup_event():
-    await init_db()
+    await create_tables()
 
 # Basic test route
 @app.get("/")
