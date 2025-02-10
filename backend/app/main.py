@@ -15,7 +15,7 @@ app = FastAPI(title="Artevia API")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["http://localhost:63907", "http://localhost:3000"],  # Add your Flutter web port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

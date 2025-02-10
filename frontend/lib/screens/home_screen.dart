@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../features/discovery/widgets/discovery_map.dart';
+import '../features/artworks/providers/artwork_provider.dart';
+import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -11,16 +14,39 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const DiscoveryMap(),  // Map view as the main screen
-    const Center(child: Text('Collection')),  // Placeholder for collection screen
-    const Center(child: Text('Profile')),     // Placeholder for profile screen
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _initializeLocation();
+  }
+
+  Future<void> _initializeLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
+
+      // Use fetchNearbyArtworks instead of loadNearbyArtworks
+      await context.read<ArtworkProvider>().fetchNearbyArtworks(
+        position.latitude,
+        position.longitude,
+      );
+    } catch (e) {
+      print('Error initializing location: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          const DiscoveryMap(),  // Map view as the main screen
+          const Center(child: Text('Collection')),
+          const Center(child: Text('Profile')),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {

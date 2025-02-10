@@ -8,7 +8,7 @@ class Artwork {
   final int artistId;
   final String status;
   final bool isFeatured;
-  final bool isDiscovered;
+  bool isDiscovered;
   final DateTime? createdAt;
 
   Artwork({

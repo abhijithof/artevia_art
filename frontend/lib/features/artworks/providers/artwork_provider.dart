@@ -4,29 +4,28 @@ import '../services/artwork_service.dart';
 
 class ArtworkProvider extends ChangeNotifier {
   final ArtworkService _artworkService;
-  List<Artwork> _nearbyArtworks = [];
+  List<Artwork> _artworks = [];
   Set<int> _discoveredArtworks = {};
   bool _isLoading = false;
   String? _error;
 
   ArtworkProvider(this._artworkService);
 
-  List<Artwork> get nearbyArtworks => _nearbyArtworks;
+  List<Artwork> get artworks => _artworks;
   Set<int> get discoveredArtworks => _discoveredArtworks;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> loadNearbyArtworks(double latitude, double longitude) async {
+  Future<void> fetchNearbyArtworks(double latitude, double longitude) async {
     try {
       _isLoading = true;
       _error = null;
       notifyListeners();
 
-      _nearbyArtworks = await _artworkService.getNearbyArtworks(latitude, longitude);
-      notifyListeners();
+      final artworks = await _artworkService.getNearbyArtworks(latitude, longitude);
+      _artworks = artworks;
     } catch (e) {
       _error = e.toString();
-      notifyListeners();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -50,5 +49,21 @@ class ArtworkProvider extends ChangeNotifier {
 
   bool isArtworkDiscovered(int artworkId) {
     return _discoveredArtworks.contains(artworkId);
+  }
+
+  Future<void> unlockArtwork(int artworkId, double latitude, double longitude) async {
+    try {
+      await _artworkService.unlockArtwork(artworkId, latitude, longitude);
+      
+      // Update the local artwork status
+      final index = _artworks.indexWhere((a) => a.id == artworkId);
+      if (index != -1) {
+        _artworks[index].isDiscovered = true;
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error unlocking artwork: $e');
+      rethrow;
+    }
   }
 } 
