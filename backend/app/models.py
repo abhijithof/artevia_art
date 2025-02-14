@@ -41,7 +41,7 @@ class User(Base):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        print('DEBUG - User role from backend: ${response.data['role']}');
+        print(f"DEBUG - User role from backend: {response.data['role']}")
 
 class Profile(Base):
     __tablename__ = "profiles"
