@@ -5,6 +5,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../../artworks/providers/artwork_provider.dart';
 import '../../artworks/models/artwork_model.dart';
+import '../../artworks/widgets/artwork_detail_card.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../artworks/widgets/add_artwork_form.dart';
 
 class DiscoveryMap extends StatefulWidget {
   const DiscoveryMap({Key? key}) : super(key: key);
@@ -41,10 +44,7 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
         setState(() => _currentPosition = position);
         
         final provider = Provider.of<ArtworkProvider>(context, listen: false);
-        await provider.fetchNearbyArtworks(
-          position.latitude,
-          position.longitude,
-        );
+        await provider.updateCurrentPosition(position);
 
         _mapController.move(
           LatLng(position.latitude, position.longitude),
@@ -56,42 +56,55 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
     }
   }
 
+  Widget _buildArtworkMarker(Artwork artwork) {
+    final bool canBeUnlocked = artwork.canBeUnlocked && !artwork.isUnlocked;
+    
+    return GestureDetector(
+      onTap: () => _showArtworkDetails(artwork),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: artwork.isUnlocked ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white,
+            width: 2,
+          ),
+        ),
+        child: Icon(
+          artwork.isUnlocked ? Icons.palette : Icons.lock,
+          color: Colors.white,
+          size: 24,
+        ),
+      ),
+    );
+  }
+
   void _showArtworkDetails(Artwork artwork) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              artwork.title,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (artwork.imageUrl != null)
-              Image.network(
-                artwork.imageUrl!,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            const SizedBox(height: 8),
-            Text(artwork.description),
-          ],
-        ),
+      builder: (context) => ArtworkDetailCard(
+        artwork: artwork,
+        onUnlock: (id) async {
+          try {
+            final artworkProvider = Provider.of<ArtworkProvider>(context, listen: false);
+            await artworkProvider.unlockArtwork(id);
+            Navigator.pop(context); // Close the bottom sheet
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to unlock artwork: $e')),
+            );
+          }
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ArtworkProvider>(
-      builder: (context, artworkProvider, child) {
+    return Consumer2<ArtworkProvider, AuthProvider>(
+      builder: (context, artworkProvider, authProvider, _) {
         return Stack(
           children: [
             FlutterMap(
@@ -125,26 +138,7 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
                         width: 40,
                         height: 40,
                         point: LatLng(artwork.latitude, artwork.longitude),
-                        child: GestureDetector(
-                          onTap: () => _showArtworkDetails(artwork),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.8),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2,
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.palette,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ),
-                        ),
+                        child: _buildArtworkMarker(artwork),
                       );
                     }).toList(),
                   ],
@@ -184,9 +178,31 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
                 ),
               ),
             ),
+            if (authProvider.isArtist)
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: FloatingActionButton(
+                  onPressed: () => _showAddArtworkDialog(),
+                  child: const Icon(Icons.add),
+                ),
+              ),
           ],
         );
       },
+    );
+  }
+
+  void _showAddArtworkDialog() {
+    if (_currentPosition == null) return;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => AddArtworkForm(
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+      ),
     );
   }
 } 

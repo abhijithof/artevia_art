@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../discovery/widgets/discovery_map.dart';
 import '../../artworks/providers/artwork_provider.dart';
+import '../../profile/screens/profile_screen.dart';
 import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -26,8 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
         desiredAccuracy: LocationAccuracy.high
       );
 
-      final provider = context.read<ArtworkProvider>();
-      await provider.fetchNearbyArtworks(
+      await context.read<ArtworkProvider>().fetchNearbyArtworks(
         position.latitude,
         position.longitude,
       );
@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           const Center(child: Text('Collection')),
-          const Center(child: Text('Profile')),
+          const ProfileScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

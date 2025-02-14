@@ -6,58 +6,71 @@ import 'features/auth/providers/auth_provider.dart';
 import 'features/artworks/providers/artwork_provider.dart';
 import 'features/artworks/services/artwork_service.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/services/auth_service.dart';
+import 'features/profile/screens/profile_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
   final dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:8000',
-    validateStatus: (status) => true,
+    baseUrl: 'http://localhost:8000',  // Changed from 10.0.2.2 for web
     headers: {
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Content-Type': 'application/json',
     },
+    validateStatus: (status) => status! < 500,
   ));
 
-  runApp(MyApp(dio: dio));
+  // Add logging interceptor
+  dio.interceptors.add(LogInterceptor(
+    requestBody: true,
+    responseBody: true,
+    error: true,
+  ));
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider(AuthService(dio)),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, ArtworkProvider>(
+          create: (_) => ArtworkProvider(ArtworkService(dio)),
+          update: (_, auth, previous) => ArtworkProvider(
+            ArtworkService(dio, authToken: auth.token),
+          ),
+        ),
+      ],
+      child: MyApp(navigatorKey: navigatorKey),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  final Dio dio;
-
-  const MyApp({Key? key, required this.dio}) : super(key: key);
+  final GlobalKey<NavigatorState> navigatorKey;
+  
+  const MyApp({
+    required this.navigatorKey,
+    Key? key,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ProxyProvider<AuthProvider, ArtworkService>(
-          update: (context, auth, previous) => 
-            ArtworkService(dio, authToken: auth.token),
-        ),
-        ChangeNotifierProxyProvider<ArtworkService, ArtworkProvider>(
-          create: (context) => ArtworkProvider(
-            Provider.of<ArtworkService>(context, listen: false),
-          ),
-          update: (context, service, previous) => 
-            previous ?? ArtworkProvider(service),
-        ),
-      ],
-      child: MaterialApp(
-        title: 'Artevia',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-        ),
-        home: Consumer<AuthProvider>(
-          builder: (context, authProvider, child) {
-            return authProvider.isAuthenticated 
-              ? const HomeScreen() 
-              : const LoginScreen();
-          },
-        ),
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      title: 'Artevia',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
+      initialRoute: '/login',
+      routes: {
+        '/': (context) => const HomeScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/profile': (context) => const ProfileScreen(),
+      },
     );
   }
 }

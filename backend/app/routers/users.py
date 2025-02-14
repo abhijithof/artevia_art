@@ -110,10 +110,28 @@ async def delete_user(
     return {"message": "User deleted successfully"}
 
 @router.put("/me/role/artist")
-def become_artist(
+async def become_artist(
     current_user: models.User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    current_user.role = "artist"
-    db.commit()
-    return {"message": "Successfully updated to artist role"} 
+    # Get a fresh instance of the user
+    stmt = select(models.User).where(models.User.id == current_user.id)
+    result = await db.execute(stmt)
+    user = result.scalar_one()
+    
+    # Update the role
+    user.role = "artist"
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    
+    # Return the updated user data
+    return {
+        "message": "Successfully updated to artist role",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "role": user.role
+        }
+    } 
