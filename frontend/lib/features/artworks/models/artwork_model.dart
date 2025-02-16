@@ -2,12 +2,12 @@ class Artwork {
   final int id;
   final String title;
   final String description;
-  final String? imageUrl;  // Nullable since it's hidden until unlocked
+  final String? imageUrl;
   final double latitude;
   final double longitude;
   final String artistName;
   final bool isUnlocked;
-  final double distanceFromUser;  // Add this to track distance
+  final double distanceFromUser;
 
   Artwork({
     required this.id,
@@ -21,7 +21,7 @@ class Artwork {
     this.distanceFromUser = double.infinity,
   });
 
-  bool get canBeUnlocked => distanceFromUser <= 1000; // 1km in meters
+  bool get canBeUnlocked => distanceFromUser <= 1000;
 
   factory Artwork.fromJson(Map<String, dynamic> json, {double distanceFromUser = double.infinity}) {
     return Artwork(
@@ -40,4 +40,4 @@ class Artwork {
       distanceFromUser: distanceFromUser,
     );
   }
-} 
+}

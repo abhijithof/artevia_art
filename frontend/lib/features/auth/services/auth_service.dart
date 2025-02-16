@@ -77,8 +77,12 @@ class AuthService {
     }
   }
 
-  Future<User> getCurrentUser(String s) async {
+  Future<User> getCurrentUser() async {
     try {
+      if (authToken == null) {
+        throw Exception('No auth token available');
+      }
+      
       print('Getting current user with token: $authToken');
       final response = await _dio.get(
         '/users/me',

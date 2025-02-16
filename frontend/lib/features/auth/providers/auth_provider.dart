@@ -89,7 +89,8 @@ class AuthProvider extends ChangeNotifier {
     _token = prefs.getString('token');
     if (_token != null) {
       try {
-        _user = await _authService.getCurrentUser();
+        final authenticatedService = _authService.withToken(_token!);
+        _user = await authenticatedService.getCurrentUser();
         notifyListeners();
       } catch (e) {
         _token = null;
