@@ -3,80 +3,87 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from .. import models, schemas
 from ..database import get_db
-from ..auth import get_current_user
-from ..utils import save_image, calculate_distance, PaginationParams, search_filter
+from ..auth.auth import get_current_user
+from ..utils import save_image, calculate_distance, PaginationParams, search_filter, save_uploaded_file
 from PIL import Image
 import io
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from ..schemas.pagination import Page
 from sqlalchemy.orm import selectinload
+from ..schemas.artwork import Artwork, ArtworkCreate, ArtworkResponse
 
 router = APIRouter(
     prefix="/artworks",
     tags=["artworks"]
 )
 
+# Predefined categories
+PREDEFINED_CATEGORIES = [
+    "Mural",
+    "Graffiti",
+    "Sculpture",
+    "Installation",
+    "Street Art",
+    "Digital Art",
+    "Mixed Media",
+    "Traditional",
+]
+
 # First, endpoint to get categories for the dropdown
-@router.get("/categories", response_model=List[schemas.Category])
-async def get_categories(db: Session = Depends(get_db)):
-    """Get all available categories for artwork creation"""
-    return db.query(models.Category).all()
+@router.get("/categories")
+async def get_categories(db: AsyncSession = Depends(get_db)):
+    try:
+        # For now, just return predefined categories
+        return PREDEFINED_CATEGORIES
+    except Exception as e:
+        print(f"Error getting categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # CRUD Operations
-@router.post("/", response_model=schemas.ArtworkResponse)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_artwork(
     title: str = Form(...),
     description: str = Form(...),
+    image: UploadFile = File(...),
     latitude: float = Form(...),
     longitude: float = Form(...),
-    category_id: int = Form(...),  # Single category selection
-    image: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    category: str = Form(...),
+    db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    if current_user.role != "artist":
-        raise HTTPException(status_code=403, detail="Only artists can create artworks")
-    
-    # Verify category exists
-    category = db.query(models.Category).filter(models.Category.id == category_id).first()
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
-    
-    # Validate image
-    allowed_types = {"image/jpeg", "image/png", "image/webp"}
-    if image.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Invalid image type")
-    
-    # Save and process image
-    image_url = await save_image(image)
-    
-    db_artwork = models.Artwork(
-        title=title,
-        description=description,
-        image_url=image_url,
-        latitude=latitude,
-        longitude=longitude,
-        artist_id=current_user.id,
-        categories=[category]  # Assign the selected category
-    )
-    
-    db.add(db_artwork)
-    db.commit()
-    db.refresh(db_artwork)
-    return schemas.ArtworkResponse(
-        id=db_artwork.id,
-        title=db_artwork.title,
-        description=db_artwork.description,
-        image_url=db_artwork.image_url,
-        latitude=db_artwork.latitude,
-        longitude=db_artwork.longitude,
-        artist_id=db_artwork.artist_id,
-        status=db_artwork.status,
-        is_featured=db_artwork.is_featured,
-        created_at=db_artwork.created_at,
-        categories=[c.name for c in db_artwork.categories]
-    )
+    try:
+        # Save the image
+        image_path = await save_uploaded_file(image)
+        
+        # Create artwork
+        artwork = models.Artwork(
+            title=title,
+            description=description,
+            image_url=image_path,
+            latitude=latitude,
+            longitude=longitude,
+            artist_id=current_user.id,
+            status="active"
+        )
+        
+        db.add(artwork)
+        await db.commit()
+        await db.refresh(artwork)
+        
+        return {
+            "id": artwork.id,
+            "title": artwork.title,
+            "description": artwork.description,
+            "image_url": artwork.image_url,
+            "latitude": artwork.latitude,
+            "longitude": artwork.longitude,
+            "artist_id": artwork.artist_id,
+            "status": artwork.status
+        }
+    except Exception as e:
+        print(f"Error creating artwork: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{artwork_id}", response_model=schemas.ArtworkResponse)
 async def update_artwork(
@@ -182,69 +189,74 @@ async def get_nearby_artworks(
     radius: float = 5.0,
     db: AsyncSession = Depends(get_db)
 ):
-    # Use selectinload to load categories relationship
-    query = select(models.Artwork).options(selectinload(models.Artwork.categories))
-    result = await db.execute(query)
-    artworks = result.scalars().all()
-    
-    # Filter artworks within radius
-    nearby_artworks = [
-        artwork for artwork in artworks
-        if calculate_distance(latitude, longitude, artwork.latitude, artwork.longitude) <= radius
-    ]
-    
-    # Return with all fields intact
-    return [
-        {
-            "id": artwork.id,
-            "title": artwork.title,
-            "description": artwork.description,
-            "image_url": artwork.image_url,
-            "latitude": artwork.latitude,
-            "longitude": artwork.longitude,
-            "artist_id": artwork.artist_id,
-            "status": artwork.status,
-            "is_featured": artwork.is_featured,
-            "created_at": artwork.created_at,
-            "categories": [c.name for c in artwork.categories]
-        }
-        for artwork in nearby_artworks
-    ]
+    try:
+        print(f"Received request for artworks near lat:{latitude}, lon:{longitude}")
+        
+        # Get all artworks
+        query = (
+            select(models.Artwork)
+            .filter(models.Artwork.status == "active")  # Only get active artworks
+            .options(selectinload(models.Artwork.categories))  # Include categories
+        )
+        result = await db.execute(query)
+        all_artworks = result.scalars().all()
+        
+        # Filter artworks by distance
+        nearby_artworks = []
+        for artwork in all_artworks:
+            distance = calculate_distance(
+                latitude, longitude,
+                artwork.latitude, artwork.longitude
+            )
+            if distance <= radius:
+                artwork_dict = {
+                    "id": artwork.id,
+                    "title": artwork.title,
+                    "description": artwork.description,
+                    "image_url": artwork.image_url,
+                    "latitude": artwork.latitude,
+                    "longitude": artwork.longitude,
+                    "artist_id": artwork.artist_id,
+                    "status": artwork.status,
+                    "is_featured": artwork.is_featured,
+                    "created_at": artwork.created_at.isoformat() if artwork.created_at else None,
+                    "categories": [c.name for c in artwork.categories],
+                    "distance": round(distance, 2)  # Include distance in km
+                }
+                nearby_artworks.append(artwork_dict)
+        
+        print(f"Found {len(nearby_artworks)} nearby artworks")
+        return nearby_artworks
+        
+    except Exception as e:
+        print(f"Error in get_nearby_artworks: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[schemas.ArtworkResponse])
+@router.get("/", response_model=List[ArtworkResponse])
 async def get_artworks(
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    try:
-        # Use selectinload to load categories relationship
-        stmt = select(models.Artwork).options(selectinload(models.Artwork.categories))
-        result = await db.execute(stmt)
-        artworks = result.scalars().all()
-        
-        # Convert to response model
-        artwork_responses = []
-        for artwork in artworks:
-            artwork_responses.append(
-                schemas.ArtworkResponse(
-                    id=artwork.id,
-                    title=artwork.title,
-                    description=artwork.description,
-                    image_url=artwork.image_url,
-                    latitude=artwork.latitude,
-                    longitude=artwork.longitude,
-                    artist_id=artwork.artist_id,
-                    status=artwork.status,
-                    is_featured=artwork.is_featured,
-                    created_at=artwork.created_at,
-                    categories=[c.name for c in artwork.categories]
-                )
-            )
-        return artwork_responses
-
-    except Exception as e:
-        print(f"Error fetching artworks: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    stmt = select(models.Artwork).options(selectinload(models.Artwork.categories))
+    result = await db.execute(stmt)
+    artworks = result.scalars().all()
+    
+    return [
+        ArtworkResponse(
+            id=artwork.id,
+            title=artwork.title,
+            description=artwork.description,
+            image_url=artwork.image_url,
+            latitude=artwork.latitude,
+            longitude=artwork.longitude,
+            artist_id=artwork.artist_id,
+            status=artwork.status,
+            is_featured=artwork.is_featured,
+            created_at=artwork.created_at,
+            categories=[c.name for c in artwork.categories]
+        )
+        for artwork in artworks
+    ]
 
 @router.get("/{artwork_id}", response_model=schemas.ArtworkResponse)
 async def get_artwork(

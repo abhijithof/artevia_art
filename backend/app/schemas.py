@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, HttpUrl, constr
 from typing import Optional, List, Dict
 from datetime import datetime
+from fastapi import UploadFile
 
 # Category Schemas
 class CategoryBase(BaseModel):
@@ -20,18 +21,22 @@ class Category(CategoryBase):
 class UserBase(BaseModel):
     email: str
     username: str
+    role: Optional[str] = "user"
 
 class UserCreate(UserBase):
     password: str
 
-class UserUpdate(BaseModel):
-    email: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
-
 class User(UserBase):
     id: int
-    role: str
+    is_active: bool = True
+    status: str = "active"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    profile_picture: Optional[str] = None
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    social_links: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -74,26 +79,22 @@ class Discovery(BaseModel):
         from_attributes = True
 
 # Artwork Schemas
-class ArtworkBase(BaseModel):
+class artwork(BaseModel):
     title: str
-    description: Optional[str] = None
+    description: str
     latitude: float
     longitude: float
+    status: str = "active"
+    is_featured: bool = False
+    image_url: Optional[str] = None
 
-class ArtworkCreate(ArtworkBase):
+class ArtworkCreate(artwork):
     pass
 
-class Artwork(ArtworkBase):
+class Artwork(artwork):
     id: int
-    image_url: str
     artist_id: int
-    status: str
-    is_featured: bool
     created_at: datetime
-    artist: User
-    categories: List[Category] = []
-    likes: List[Like] = []
-    comments: List[Comment] = []
 
     class Config:
         from_attributes = True

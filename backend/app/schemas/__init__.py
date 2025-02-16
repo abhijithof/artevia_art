@@ -1,6 +1,6 @@
+from .artwork import ArtworkBase, ArtworkCreate, Artwork, ArtworkResponse, ArtworkUpdate
 from .user import User, UserCreate, UserUpdate, UserInDB, UserProfile
 from .token import Token, TokenData
-from .artwork import ArtworkResponse, ArtworkCreate, ArtworkUpdate
 from .pagination import Page
 from .profile import Profile, ProfileCreate, ProfileUpdate
 from .category import Category, CategoryCreate
@@ -11,7 +11,7 @@ from .moderation import ModerationLog, ModerationLogCreate
 __all__ = [
     'User', 'UserCreate', 'UserUpdate', 'UserInDB', 'UserProfile',
     'Token', 'TokenData',
-    'ArtworkResponse', 'ArtworkCreate', 'ArtworkUpdate',
+    'Artwork', 'ArtworkCreate', 'ArtworkBase', 'ArtworkResponse', 'ArtworkUpdate',
     'Page',
     'Profile', 'ProfileCreate', 'ProfileUpdate',
     'Category', 'CategoryCreate',

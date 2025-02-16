@@ -5,12 +5,11 @@ from typing import List, Optional
 class ArtworkBase(BaseModel):
     title: str
     description: str
-    image_url: str
     latitude: float
     longitude: float
     status: str = "active"
     is_featured: bool = False
-    categories: List[str] = []
+    image_url: Optional[str] = None
 
 class ArtworkCreate(ArtworkBase):
     pass
@@ -23,12 +22,14 @@ class ArtworkUpdate(ArtworkBase):
     longitude: Optional[float] = None
     status: Optional[str] = None
     is_featured: Optional[bool] = None
-    categories: Optional[List[str]] = None
 
-class ArtworkResponse(ArtworkBase):
+class Artwork(ArtworkBase):
     id: int
     artist_id: int
     created_at: datetime
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+class ArtworkResponse(Artwork):
+    categories: List[str] = [] 

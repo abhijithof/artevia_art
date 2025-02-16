@@ -1,35 +1,52 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
+from typing import Optional
 from datetime import datetime
-from typing import Optional, Dict
 
 class UserBase(BaseModel):
+    email: str
     username: str
-    email: EmailStr
+    role: Optional[str] = "user"
 
 class UserCreate(UserBase):
     password: str
 
-class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    email: Optional[EmailStr] = None
+class UserUpdate(UserBase):
     password: Optional[str] = None
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    social_links: Optional[str] = None
+
+class UserInDB(UserBase):
+    id: int
+    hashed_password: str
+    is_active: bool = True
+    status: str = "active"
+
+class UserProfile(BaseModel):
+    id: int
+    username: str
+    email: str
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    social_links: Optional[str] = None
+    profile_picture: Optional[str] = None
+    role: str
+    status: str
+    created_at: Optional[datetime] = None
 
 class User(UserBase):
     id: int
-    role: str
-    status: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class UserInDB(User):
-    password_hash: str
-
-class UserProfile(User):
-    profile: Optional[Dict] = None
-    total_artworks: int = 0
-    total_discoveries: int = 0
+    is_active: bool = True
+    status: str = "active"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    profile_picture: Optional[str] = None
+    bio: Optional[str] = None
+    website: Optional[str] = None
+    location: Optional[str] = None
+    social_links: Optional[str] = None
 
     class Config:
         from_attributes = True 

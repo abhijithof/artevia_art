@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../discovery/widgets/discovery_map.dart';
-import '../../artworks/providers/artwork_provider.dart';
-import '../../profile/screens/profile_screen.dart';
+import '../features/discovery/widgets/discovery_map.dart';
+import '../features/artworks/providers/artwork_provider.dart';
 import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -27,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
         desiredAccuracy: LocationAccuracy.high
       );
 
+      // Use fetchNearbyArtworks instead of loadNearbyArtworks
       await context.read<ArtworkProvider>().fetchNearbyArtworks(
         position.latitude,
         position.longitude,
@@ -42,13 +42,9 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          Consumer<ArtworkProvider>(
-            builder: (context, provider, child) {
-              return const DiscoveryMap();
-            },
-          ),
+          const DiscoveryMap(),  // Map view as the main screen
           const Center(child: Text('Collection')),
-          const ProfileScreen(),
+          const Center(child: Text('Profile')),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -75,4 +71,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
+} 

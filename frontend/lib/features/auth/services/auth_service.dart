@@ -1,47 +1,63 @@
 import 'package:dio/dio.dart';
 import '../models/user_model.dart';
+import '../../../core/config/api_config.dart';
 
 class AuthService {
-  final Dio _dio = Dio(BaseOptions(
-    baseUrl: 'http://127.0.0.1:8000',  // Make sure this matches your backend port
-    validateStatus: (status) => true,  // For debugging
-  ));
+  final Dio _dio;
+  final String? authToken;
+
+  AuthService(this._dio, {this.authToken}) {
+    // Add default configurations for Dio
+    _dio.options.validateStatus = (status) {
+      return status! < 500;
+    };
+    _dio.options.headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+  }
+
+  // Add a method to create an authenticated instance
+  AuthService withToken(String token) {
+    return AuthService(_dio, authToken: token);
+  }
 
   Future<String> login(String email, String password) async {
     try {
-      print('Attempting login for: $email'); // Debug print
-
-      final formData = FormData.fromMap({
-        'username': email,
-        'password': password,
-      });
-
-      print('Sending login request...'); // Debug print
+      print('Attempting login for: $email');
       final response = await _dio.post(
-        '/auth/token',
-        data: formData,
+        ApiConfig.loginEndpoint,
+        data: {
+          'username': email,
+          'password': password,
+          'grant_type': 'password',
+        },
         options: Options(
           contentType: 'application/x-www-form-urlencoded',
-          followRedirects: false,
-          validateStatus: (status) => true,
+          headers: {
+            'Accept': 'application/json',
+          },
         ),
       );
-      print('Login response: ${response.data}'); // Debug print
 
+      print('Login response: ${response.data}');
       if (response.statusCode == 200) {
-        return response.data['access_token'];
-      } else {
-        throw Exception('Login failed: ${response.statusCode} - ${response.data}');
+        final token = response.data['access_token'];
+        if (token == null) {
+          throw Exception('No token in response');
+        }
+        return token;
       }
+      throw Exception('Failed to login: ${response.statusCode}');
     } catch (e) {
-      print('Login error: $e'); // Debug print
+      print('Error in login: $e');
       rethrow;
     }
   }
 
-  Future<User> register(String email, String username, String password) async {
+  Future<void> register(String email, String username, String password) async {
     try {
-      print('Attempting registration...'); // Debug print
+      print('Attempting registration with email: $email');
       final response = await _dio.post(
         '/users/',
         data: {
@@ -50,37 +66,62 @@ class AuthService {
           'password': password,
         },
       );
-      print('Registration response: ${response.data}'); // Debug print
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return User.fromJson(response.data);
-      } else {
-        throw Exception('Registration failed: ${response.statusCode} - ${response.data}');
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(response.data['detail'] ?? 'Failed to register');
       }
+      print('Registration successful');
     } catch (e) {
-      print('Registration error: $e'); // Debug print
+      print('Error in register: $e');
       rethrow;
     }
   }
 
-  Future<User> getCurrentUser(String token) async {
+  Future<User> getCurrentUser(String s) async {
     try {
+      print('Getting current user with token: $authToken');
       final response = await _dio.get(
         '/users/me',
         options: Options(
           headers: {
-            'Authorization': 'Bearer $token',
+            'Authorization': 'Bearer $authToken',
+            'Accept': 'application/json',
           },
         ),
       );
 
+      print('Current user response: ${response.data}');
+      print('DEBUG - User role from backend: ${response.data['role']}');
       if (response.statusCode == 200) {
         return User.fromJson(response.data);
-      } else {
-        throw Exception('Failed to get user profile');
       }
+      throw Exception('Failed to get user profile: ${response.statusCode}');
     } catch (e) {
-      print('Get user error: $e'); // Debug print
+      print('Error getting user profile: $e');
+      rethrow;
+    }
+  }
+
+  Future<User> convertToArtist() async {
+    try {
+      final response = await _dio.put(
+        '/users/me/role/artist',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+
+      print('Convert to artist response: ${response.data}');
+      if (response.statusCode == 200) {
+        return await getCurrentUser();
+      }
+      throw Exception('Failed to convert to artist: ${response.statusCode} - ${response.data}');
+    } catch (e) {
+      print('Error converting to artist: $e');
       rethrow;
     }
   }
