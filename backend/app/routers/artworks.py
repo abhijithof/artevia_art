@@ -4,7 +4,7 @@ from typing import List, Optional
 from .. import models, schemas
 from ..database import get_db
 from ..auth.auth import get_current_user
-from ..utils import save_image, calculate_distance, PaginationParams, search_filter
+from ..utils import save_image, calculate_distance, PaginationParams, search_filter, save_uploaded_file
 from PIL import Image
 import io
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,34 +18,72 @@ router = APIRouter(
     tags=["artworks"]
 )
 
+# Predefined categories
+PREDEFINED_CATEGORIES = [
+    "Mural",
+    "Graffiti",
+    "Sculpture",
+    "Installation",
+    "Street Art",
+    "Digital Art",
+    "Mixed Media",
+    "Traditional",
+]
+
 # First, endpoint to get categories for the dropdown
-@router.get("/categories", response_model=List[schemas.Category])
-async def get_categories(db: Session = Depends(get_db)):
-    """Get all available categories for artwork creation"""
-    return db.query(models.Category).all()
+@router.get("/categories")
+async def get_categories(db: AsyncSession = Depends(get_db)):
+    try:
+        # For now, just return predefined categories
+        return PREDEFINED_CATEGORIES
+    except Exception as e:
+        print(f"Error getting categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # CRUD Operations
-@router.post("/", response_model=Artwork)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_artwork(
-    artwork: ArtworkCreate,
+    title: str = Form(...),
+    description: str = Form(...),
+    image: UploadFile = File(...),
+    latitude: float = Form(...),
+    longitude: float = Form(...),
+    category: str = Form(...),
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    db_artwork = models.Artwork(
-        title=artwork.title,
-        description=artwork.description,
-        latitude=artwork.latitude,
-        longitude=artwork.longitude,
-        status=artwork.status,
-        is_featured=artwork.is_featured,
-        artist_id=current_user.id,
-        image_url=artwork.image_url
-    )
-    
-    db.add(db_artwork)
-    await db.commit()
-    await db.refresh(db_artwork)
-    return db_artwork
+    try:
+        # Save the image
+        image_path = await save_uploaded_file(image)
+        
+        # Create artwork
+        artwork = models.Artwork(
+            title=title,
+            description=description,
+            image_url=image_path,
+            latitude=latitude,
+            longitude=longitude,
+            artist_id=current_user.id,
+            status="active"
+        )
+        
+        db.add(artwork)
+        await db.commit()
+        await db.refresh(artwork)
+        
+        return {
+            "id": artwork.id,
+            "title": artwork.title,
+            "description": artwork.description,
+            "image_url": artwork.image_url,
+            "latitude": artwork.latitude,
+            "longitude": artwork.longitude,
+            "artist_id": artwork.artist_id,
+            "status": artwork.status
+        }
+    except Exception as e:
+        print(f"Error creating artwork: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{artwork_id}", response_model=schemas.ArtworkResponse)
 async def update_artwork(

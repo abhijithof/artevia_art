@@ -147,6 +147,16 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
             ),
             Positioned(
               left: 16,
+              bottom: 200,
+              child: FloatingActionButton(
+                heroTag: "refreshLocation",
+                onPressed: _getCurrentLocation,
+                child: const Icon(Icons.refresh_rounded),
+                mini: true,
+              ),
+            ),
+            Positioned(
+              left: 16,
               bottom: 16,
               child: Container(
                 padding: const EdgeInsets.all(8),

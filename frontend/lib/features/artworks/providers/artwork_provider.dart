@@ -3,6 +3,7 @@ import '../services/artwork_service.dart';
 import '../models/artwork_model.dart';
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
 
 class ArtworkProvider extends ChangeNotifier {
   final ArtworkService _artworkService;
@@ -55,30 +56,25 @@ class ArtworkProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addArtwork({
-    required String title,
-    required String description,
-    required File imageFile,
-    required double latitude,
-    required double longitude,
-  }) async {
+  Future<void> addArtwork(FormData formData) async {
     try {
       _isLoading = true;
       _error = null;
       notifyListeners();
 
-      await _artworkService.createArtwork(
-        title: title,
-        description: description,
-        imageFile: imageFile,
-        latitude: latitude,
-        longitude: longitude,
-      );
+      await _artworkService.createArtwork(formData);
 
-      // Refresh nearby artworks
-      await fetchNearbyArtworks(latitude, longitude);
+      // Force refresh nearby artworks
+      if (_currentPosition != null) {
+        print('Refreshing nearby artworks after adding new artwork');
+        await fetchNearbyArtworks(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+        );
+      }
     } catch (e) {
       _error = e.toString();
+      print('Error in addArtwork: $_error');
       rethrow;
     } finally {
       _isLoading = false;
@@ -98,5 +94,14 @@ class ArtworkProvider extends ChangeNotifier {
   Future<void> updateCurrentPosition(Position position) async {
     _currentPosition = position;
     await fetchNearbyArtworks(position.latitude, position.longitude);
+  }
+
+  Future<List<String>> getCategories() async {
+    try {
+      return await _artworkService.getCategories();
+    } catch (e) {
+      print('Error getting categories: $e');
+      rethrow;
+    }
   }
 } 

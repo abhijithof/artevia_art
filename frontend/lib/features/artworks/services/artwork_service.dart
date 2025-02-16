@@ -80,32 +80,44 @@ class ArtworkService {
     }
   }
 
-  Future<void> createArtwork({
-    required String title,
-    required String description,
-    required File imageFile,
-    required double latitude,
-    required double longitude,
-  }) async {
+  Future<List<String>> getCategories() async {
     try {
-      final formData = FormData.fromMap({
-        'title': title,
-        'description': description,
-        'image': await MultipartFile.fromFile(imageFile.path),
-        'latitude': latitude,
-        'longitude': longitude,
-      });
-
-      final response = await _dio.post(
-        '/artworks/',
-        data: formData,
+      final response = await _dio.get(
+        '/artworks/categories',
         options: Options(
-          headers: {'Authorization': 'Bearer $authToken'},
+          headers: authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
         ),
       );
 
+      if (response.statusCode == 200) {
+        final List<dynamic> categoriesJson = response.data;
+        return categoriesJson.map((c) => c.toString()).toList();
+      }
+      throw Exception('Failed to load categories');
+    } catch (e) {
+      print('Error getting categories: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> createArtwork(FormData formData) async {
+    try {
+      print('Sending artwork data: ${formData.fields}');
+      final response = await _dio.post(
+        '/artworks',
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+          },
+        ),
+      );
+      
+      print('Response status: ${response.statusCode}');
+      print('Response data: ${response.data}');
+      
       if (response.statusCode != 201) {
-        throw Exception('Failed to create artwork');
+        throw Exception('Failed to create artwork: ${response.statusCode}');
       }
     } catch (e) {
       print('Error creating artwork: $e');

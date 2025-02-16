@@ -70,4 +70,24 @@ def search_filter(query, model, search_term: str, fields: List[str]):
     conditions = []
     for field in fields:
         conditions.append(getattr(model, field).ilike(f"%{search_term}%"))
-    return query.filter(or_(*conditions)) 
+    return query.filter(or_(*conditions))
+
+async def save_uploaded_file(file: UploadFile) -> str:
+    """Save an uploaded file and return its relative path."""
+    UPLOAD_DIR = "static/uploads"
+    
+    # Create uploads directory if it doesn't exist
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    
+    # Generate unique filename using timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{timestamp}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    
+    # Save the file
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    
+    # Return the relative path
+    return f"/uploads/{filename}" 
