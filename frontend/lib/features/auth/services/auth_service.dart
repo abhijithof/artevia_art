@@ -1,11 +1,21 @@
 import 'package:dio/dio.dart';
 import '../models/user_model.dart';
+import '../../../core/config/api_config.dart';
 
 class AuthService {
   final Dio _dio;
   final String? authToken;
 
-  AuthService(this._dio, {this.authToken});
+  AuthService(this._dio, {this.authToken}) {
+    // Add default configurations for Dio
+    _dio.options.validateStatus = (status) {
+      return status! < 500;
+    };
+    _dio.options.headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+  }
 
   // Add a method to create an authenticated instance
   AuthService withToken(String token) {
@@ -16,14 +26,14 @@ class AuthService {
     try {
       print('Attempting login for: $email');
       final response = await _dio.post(
-        '/auth/token',
+        ApiConfig.loginEndpoint,
         data: {
-          'username': email,  // FastAPI OAuth2 expects 'username'
+          'username': email,
           'password': password,
-          'grant_type': 'password',  // Add this for OAuth2
+          'grant_type': 'password',
         },
         options: Options(
-          contentType: 'application/x-www-form-urlencoded',  // Required for OAuth2
+          contentType: 'application/x-www-form-urlencoded',
           headers: {
             'Accept': 'application/json',
           },
@@ -47,8 +57,9 @@ class AuthService {
 
   Future<void> register(String email, String username, String password) async {
     try {
+      print('Attempting registration with email: $email');
       final response = await _dio.post(
-        '/auth/register',
+        '/users/',
         data: {
           'email': email,
           'username': username,
@@ -56,16 +67,17 @@ class AuthService {
         },
       );
 
-      if (response.statusCode != 201) {
-        throw Exception('Failed to register');
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(response.data['detail'] ?? 'Failed to register');
       }
+      print('Registration successful');
     } catch (e) {
       print('Error in register: $e');
       rethrow;
     }
   }
 
-  Future<User> getCurrentUser() async {
+  Future<User> getCurrentUser(String s) async {
     try {
       print('Getting current user with token: $authToken');
       final response = await _dio.get(

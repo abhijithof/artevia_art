@@ -12,10 +12,10 @@ from .routers import users, auth, artworks, social, discoveries, categories, adm
 # Initialize FastAPI app
 app = FastAPI(title="Artevia API")
 
-# Add CORS middleware
+# Update CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development only
+    allow_origins=["*"],  # In production, replace with specific origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

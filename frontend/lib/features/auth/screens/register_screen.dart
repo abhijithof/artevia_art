@@ -34,12 +34,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _passwordController.text,
         );
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! Please login.'),
+              backgroundColor: Colors.green,
+            ),
+          );
           Navigator.pop(context); // Go back to login screen
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.toString())),
+            SnackBar(
+              content: Text('Registration failed: ${e.toString().replaceAll('Exception: ', '')}'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
