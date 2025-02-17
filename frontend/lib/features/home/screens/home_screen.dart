@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initializeLocation();
+    _initializeUnlockedArtworks();
   }
 
   Future<void> _initializeLocation() async {
@@ -35,6 +36,14 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       print('Error initializing location: $e');
+    }
+  }
+
+  Future<void> _initializeUnlockedArtworks() async {
+    try {
+      await context.read<ArtworkProvider>().fetchUnlockedArtworks();
+    } catch (e) {
+      print('Error initializing unlocked artworks: $e');
     }
   }
 
@@ -57,6 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _selectedIndex = index;
           });
+          if (index == 2) {
+            _initializeUnlockedArtworks();
+          }
         },
         items: const [
           BottomNavigationBarItem(

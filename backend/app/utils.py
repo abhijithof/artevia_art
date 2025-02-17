@@ -6,6 +6,8 @@ from datetime import datetime
 from math import sin, cos, sqrt, atan2, radians
 from typing import Optional, List
 from sqlalchemy import or_
+import aiofiles
+import uuid
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -72,22 +74,24 @@ def search_filter(query, model, search_term: str, fields: List[str]):
         conditions.append(getattr(model, field).ilike(f"%{search_term}%"))
     return query.filter(or_(*conditions))
 
-async def save_uploaded_file(file: UploadFile) -> str:
-    """Save an uploaded file and return its relative path."""
-    UPLOAD_DIR = "static/uploads"
-    
-    # Create uploads directory if it doesn't exist
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    
-    # Generate unique filename using timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{timestamp}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    
-    # Save the file
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
-    # Return the relative path
-    return f"/uploads/{filename}" 
+async def save_uploaded_file(upload_file: UploadFile) -> str:
+    try:
+        # Create uploads directory if it doesn't exist
+        UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{timestamp}_{upload_file.filename.replace(' ', '_')}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        
+        # Save file
+        content = await upload_file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+            
+        print(f"File saved successfully at: {file_path}")  # Debug print
+        return f"/uploads/{filename}"
+    except Exception as e:
+        print(f"Error saving file: {str(e)}")
+        return None 

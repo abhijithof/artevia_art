@@ -8,9 +8,9 @@ from ..utils import save_image, calculate_distance, PaginationParams, search_fil
 from PIL import Image
 import io
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case, and_
 from ..schemas.pagination import Page
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from ..schemas.artwork import Artwork, ArtworkCreate, ArtworkResponse
 from datetime import datetime
 
@@ -41,24 +41,29 @@ async def get_categories(db: AsyncSession = Depends(get_db)):
         print(f"Error getting categories: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Define this BEFORE any routes that use it
+async def get_current_user_or_none(
+    current_user: Optional[models.User] = Depends(get_current_user)
+) -> Optional[models.User]:
+    return current_user
+
 # CRUD Operations
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ArtworkResponse)
 async def create_artwork(
     title: str = Form(...),
     description: str = Form(...),
-    image: UploadFile = File(...),
     latitude: float = Form(...),
     longitude: float = Form(...),
-    category: str = Form(...),
+    image: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
-        # Save the image
+        # Just save the image, no complex validation
         image_path = await save_uploaded_file(image)
         
-        # Create artwork
-        artwork = models.Artwork(
+        # Create new artwork
+        new_artwork = models.Artwork(
             title=title,
             description=description,
             image_url=image_path,
@@ -68,23 +73,31 @@ async def create_artwork(
             status="active"
         )
         
-        db.add(artwork)
+        db.add(new_artwork)
         await db.commit()
-        await db.refresh(artwork)
+        await db.refresh(new_artwork)
         
         return {
-            "id": artwork.id,
-            "title": artwork.title,
-            "description": artwork.description,
-            "image_url": artwork.image_url,
-            "latitude": artwork.latitude,
-            "longitude": artwork.longitude,
-            "artist_id": artwork.artist_id,
-            "status": artwork.status
+            "id": new_artwork.id,
+            "title": new_artwork.title,
+            "description": new_artwork.description,
+            "image_url": new_artwork.image_url,
+            "latitude": new_artwork.latitude,
+            "longitude": new_artwork.longitude,
+            "artist_id": new_artwork.artist_id,
+            "artist_name": current_user.username,
+            "status": new_artwork.status,
+            "is_featured": new_artwork.is_featured,
+            "created_at": new_artwork.created_at,
+            "categories": []
         }
     except Exception as e:
-        print(f"Error creating artwork: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        await db.rollback()
+        print(f"Error creating artwork: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 @router.put("/{artwork_id}", response_model=schemas.ArtworkResponse)
 async def update_artwork(
@@ -212,30 +225,48 @@ async def get_nearby_artworks(
     latitude: float,
     longitude: float,
     radius: float = 5.0,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(get_current_user_or_none)
 ):
     try:
         print(f"Received request for artworks near lat:{latitude}, lon:{longitude}")
         
-        # Get all artworks with artist information
+        # Get all artworks with artist information and unlocked status
         query = (
-            select(models.Artwork, models.User.username.label('artist_name'))
+            select(
+                models.Artwork,
+                models.User.username.label('artist_name'),
+                case(
+                    (models.UnlockedArtwork.artwork_id != None, True),
+                    else_=False
+                ).label('is_unlocked')
+            )
             .join(models.User, models.Artwork.artist_id == models.User.id)
+            .outerjoin(
+                models.UnlockedArtwork,
+                and_(
+                    models.UnlockedArtwork.artwork_id == models.Artwork.id,
+                    models.UnlockedArtwork.user_id == current_user.id if current_user else False
+                )
+            )
             .filter(models.Artwork.status == "active")
             .options(selectinload(models.Artwork.categories))
         )
+        
         result = await db.execute(query)
         all_artworks = result.all()
         
-        # Filter artworks by distance
         nearby_artworks = []
         for artwork_row in all_artworks:
             artwork = artwork_row[0]
             artist_name = artwork_row[1]
+            is_unlocked = artwork_row[2]
+            
             distance = calculate_distance(
                 latitude, longitude,
                 artwork.latitude, artwork.longitude
             )
+            
             if distance <= radius:
                 artwork_dict = {
                     "id": artwork.id,
@@ -245,12 +276,13 @@ async def get_nearby_artworks(
                     "latitude": artwork.latitude,
                     "longitude": artwork.longitude,
                     "artist_id": artwork.artist_id,
-                    "artist_name": artist_name,  # Include artist name
+                    "artist_name": artist_name,
                     "status": artwork.status,
                     "is_featured": artwork.is_featured,
                     "created_at": artwork.created_at,
                     "categories": [c.name for c in artwork.categories],
-                    "distance": distance / 1000  # Convert to kilometers
+                    "distance": distance / 1000,  # Convert to kilometers
+                    "is_unlocked": is_unlocked
                 }
                 nearby_artworks.append(artwork_dict)
         
@@ -334,7 +366,10 @@ async def unlock_artwork(
         artwork = result.scalar_one_or_none()
         
         if not artwork:
-            raise HTTPException(status_code=404, detail="Artwork not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="Artwork not found"
+            )
 
         # Check if already unlocked
         unlocked_query = select(models.UnlockedArtwork).where(
@@ -345,7 +380,7 @@ async def unlock_artwork(
         existing_unlock = result.scalar_one_or_none()
         
         if existing_unlock:
-            return {"message": "Artwork already unlocked"}
+            return {"message": "Artwork already unlocked", "status": "already_unlocked"}
 
         # Create new unlock record
         new_unlock = models.UnlockedArtwork(
@@ -355,42 +390,64 @@ async def unlock_artwork(
         db.add(new_unlock)
         await db.commit()
         
-        return {"message": "Artwork unlocked successfully"}
+        return {
+            "message": "Artwork unlocked successfully",
+            "status": "success",
+            "artwork_id": artwork_data.artwork_id
+        }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error unlocking artwork: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-@router.get("/unlocked", response_model=List[schemas.ArtworkResponse])
+@router.get("/user/unlocked", response_model=List[ArtworkResponse])
 async def get_unlocked_artworks(
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
-        # Get all unlocked artworks for the current user
-        query = (
+        # Get unlocked artwork IDs for the user with all necessary joins
+        stmt = (
             select(models.Artwork)
             .join(models.UnlockedArtwork)
+            .join(models.User, models.Artwork.artist_id == models.User.id)
             .where(models.UnlockedArtwork.user_id == current_user.id)
-            .options(selectinload(models.Artwork.categories))
+            .options(
+                joinedload(models.Artwork.artist),
+                joinedload(models.Artwork.categories)
+            )
         )
-        result = await db.execute(query)
-        artworks = result.scalars().all()
+        
+        result = await db.execute(stmt)
+        artworks = result.unique().scalars().all()
         
         return [
-            schemas.ArtworkResponse(
-                id=artwork.id,
-                title=artwork.title,
-                description=artwork.description,
-                image_url=artwork.image_url,
-                latitude=artwork.latitude,
-                longitude=artwork.longitude,
-                artist_id=artwork.artist_id,
-                status=artwork.status,
-                is_featured=artwork.is_featured,
-                created_at=artwork.created_at,
-                categories=[c.name for c in artwork.categories]
-            )
+            {
+                "id": artwork.id,
+                "title": artwork.title,
+                "description": artwork.description,
+                "image_url": artwork.image_url,
+                "latitude": artwork.latitude,
+                "longitude": artwork.longitude,
+                "artist_id": artwork.artist_id,
+                "artist_name": artwork.artist.username if artwork.artist else "Unknown",
+                "status": artwork.status,
+                "is_featured": artwork.is_featured,
+                "is_unlocked": True,
+                "distance": 0.0,
+                "created_at": artwork.created_at,
+                "categories": [c.name for c in artwork.categories] if artwork.categories else []
+            }
             for artwork in artworks
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        print(f"Error in get_unlocked_artworks: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        ) 

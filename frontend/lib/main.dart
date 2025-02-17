@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/features/auth/screens/login_screen.dart';
+import 'package:frontend/features/home/screens/home_screen.dart';
+import 'package:frontend/features/profile/screens/profile_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
-import 'features/home/screens/home_screen.dart';
+import 'services/api_service.dart';
 import 'features/auth/providers/auth_provider.dart';
+import 'features/auth/services/auth_service.dart';
 import 'features/artworks/providers/artwork_provider.dart';
 import 'features/artworks/services/artwork_service.dart';
-import 'features/auth/screens/login_screen.dart';
-import 'features/auth/services/auth_service.dart';
-import 'features/profile/screens/profile_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -15,12 +16,11 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
   final dio = Dio(BaseOptions(
-    baseUrl: 'http://localhost:8000',  // Changed from 10.0.2.2 for web
+    baseUrl: ApiService.baseUrl,
+    validateStatus: (status) => status! < 500,
     headers: {
       'Accept': 'application/json',
-      'Content-Type': 'application/json',
     },
-    validateStatus: (status) => status! < 500,
   ));
 
   // Add logging interceptor
@@ -37,9 +37,13 @@ void main() {
           create: (_) => AuthProvider(AuthService(dio)),
         ),
         ChangeNotifierProxyProvider<AuthProvider, ArtworkProvider>(
-          create: (_) => ArtworkProvider(ArtworkService(dio)),
+          create: (_) => ArtworkProvider(ArtworkService(dio), dio),
           update: (_, auth, previous) => ArtworkProvider(
-            ArtworkService(dio, authToken: auth.token),
+            ArtworkService(
+              dio,
+              authToken: auth.token,
+            ),
+            dio,
           ),
         ),
       ],
@@ -59,6 +63,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       title: 'Artevia',
       theme: ThemeData(
@@ -74,3 +79,4 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+

@@ -8,6 +8,7 @@ import asyncio
 from . import models
 from .database import engine, get_db, Base
 from .routers import users, auth, artworks, social, discoveries, categories, admin, profiles
+import os
 
 # Initialize FastAPI app
 app = FastAPI(title="Artevia API")
@@ -21,8 +22,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files directory
-app.mount("/images", StaticFiles(directory="static/images"), name="images")
+# Create both static and uploads directories
+static_dir = os.path.join(os.getcwd(), "static")
+uploads_dir = os.path.join(os.getcwd(), "uploads")
+os.makedirs(static_dir, exist_ok=True)
+os.makedirs(uploads_dir, exist_ok=True)
+
+# Mount both directories
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+print(f"Static directory: {static_dir}")
+print(f"Uploads directory: {uploads_dir}")
 
 # Include routers
 app.include_router(users.router)

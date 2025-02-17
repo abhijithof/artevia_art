@@ -20,7 +20,7 @@ class Artwork {
     required this.artistName,
     required this.artistId,
     this.isUnlocked = false,
-    this.distanceFromUser = double.infinity,
+    this.distanceFromUser = 0,
   });
 
   bool get canBeUnlocked => distanceFromUser <= 1000;
@@ -51,14 +51,11 @@ class Artwork {
     );
   }
 
-  factory Artwork.fromJson(Map<String, dynamic> json, {double distanceFromUser = double.infinity}) {
-    // Convert distance from meters to kilometers if it's provided in the JSON
-    final distance = json['distance'] != null 
-        ? (json['distance'] is String 
-            ? double.parse(json['distance']) 
-            : json['distance'].toDouble())
-        : distanceFromUser / 1000; // Convert Geolocator distance from meters to km
-
+  factory Artwork.fromJson(Map<String, dynamic> json, {
+    double distanceFromUser = 0,
+    bool isUnlocked = false,
+    String? artistName,
+  }) {
     return Artwork(
       id: json['id'] is String ? int.parse(json['id']) : json['id'],
       title: json['title'] ?? '',
@@ -70,12 +67,12 @@ class Artwork {
       longitude: (json['longitude'] is String) 
           ? double.parse(json['longitude']) 
           : json['longitude']?.toDouble() ?? 0.0,
-      artistName: json['artist_name'] ?? 'Unknown Artist',
+      artistName: artistName ?? json['artist_name'] ?? 'Unknown Artist',
       artistId: json['artist_id'] is String 
           ? int.parse(json['artist_id']) 
           : json['artist_id'],
-      isUnlocked: json['is_unlocked'] ?? false,
-      distanceFromUser: distance,
+      isUnlocked: isUnlocked || json['is_unlocked'] ?? false,
+      distanceFromUser: distanceFromUser,
     );
   }
 }

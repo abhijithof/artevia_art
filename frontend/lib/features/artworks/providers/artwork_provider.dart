@@ -4,18 +4,24 @@ import '../models/artwork_model.dart';
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 
-class ArtworkProvider extends ChangeNotifier {
+class ArtworkProvider with ChangeNotifier {
   final ArtworkService _artworkService;
+  final Dio _dio;
   List<Artwork> _artworks = [];
+  List<Artwork> _userArtworks = [];
   bool _isLoading = false;
   String? _error;
   Position? _currentPosition;
   List<Artwork> _unlockedArtworks = [];
 
-  ArtworkProvider(this._artworkService);
+  ArtworkProvider(this._artworkService, this._dio);
+
+  ArtworkService get artworkService => _artworkService;
 
   List<Artwork> get artworks => _artworks;
+  List<Artwork> get userArtworks => _userArtworks;
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Artwork> get unlockedArtworks => _unlockedArtworks;
@@ -23,6 +29,7 @@ class ArtworkProvider extends ChangeNotifier {
   Future<void> init() async {
     await Future.wait([
       fetchNearbyArtworks(_currentPosition?.latitude ?? 0, _currentPosition?.longitude ?? 0),
+      fetchUserArtworks(),
       fetchUnlockedArtworks(),
     ]);
   }
@@ -30,32 +37,58 @@ class ArtworkProvider extends ChangeNotifier {
   Future<void> fetchNearbyArtworks(double latitude, double longitude) async {
     try {
       _isLoading = true;
-      _error = null;
       notifyListeners();
 
-      final artworks = await _artworkService.getNearbyArtworks(latitude, longitude);
-      _artworks = artworks;
-    } catch (e) {
-      _error = e.toString();
-    } finally {
+      _artworks = await _artworkService.getNearbyArtworks(latitude, longitude);
+      
       _isLoading = false;
       notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      print('Error getting nearby artworks: $e');
+      throw e;
+    }
+  }
+
+  Future<void> fetchUserArtworks() async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final response = await _dio.get('/artworks/user/artworks');
+      if (response.statusCode == 200) {
+        _userArtworks = (response.data as List)
+            .map((json) => Artwork.fromJson(json))
+            .toList();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      print('Error fetching user artworks: $e');
+      throw e;
     }
   }
 
   Future<void> unlockArtwork(int id) async {
     try {
       _isLoading = true;
+      _error = null;
       notifyListeners();
 
       final success = await _artworkService.unlockArtwork(id);
       if (success) {
-        await fetchUnlockedArtworks();
-        
+        // Update the unlocked status in nearby artworks
         final index = _artworks.indexWhere((a) => a.id == id);
         if (index != -1) {
           _artworks[index] = _artworks[index].copyWith(isUnlocked: true);
         }
+        
+        // Fetch the updated unlocked artworks
+        await fetchUnlockedArtworks();
       }
     } catch (e) {
       _error = e.toString();
@@ -70,26 +103,26 @@ class ArtworkProvider extends ChangeNotifier {
   Future<void> addArtwork(FormData formData, String artistName) async {
     try {
       _isLoading = true;
-      _error = null;
       notifyListeners();
 
-      await _artworkService.createArtwork(formData, artistName);
-
-      // Force refresh nearby artworks
+      await _artworkService.createArtwork(formData);
+      
+      // Refresh the artworks list after successful creation
       if (_currentPosition != null) {
-        print('Refreshing nearby artworks after adding new artwork');
         await fetchNearbyArtworks(
           _currentPosition!.latitude,
           _currentPosition!.longitude,
         );
       }
-    } catch (e) {
-      _error = e.toString();
-      print('Error in addArtwork: $_error');
-      rethrow;
-    } finally {
+      await fetchUserArtworks();
+      
       _isLoading = false;
       notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      print('Error in addArtwork: $e');
+      rethrow;
     }
   }
 
@@ -147,11 +180,14 @@ class ArtworkProvider extends ChangeNotifier {
 
   Future<void> fetchUnlockedArtworks() async {
     try {
-      _unlockedArtworks = await _artworkService.getUnlockedArtworks();
+      _error = null;
+      final artworks = await _artworkService.getUnlockedArtworks();
+      _unlockedArtworks = artworks;
       notifyListeners();
     } catch (e) {
-      print('Error fetching unlocked artworks: $e');
       _error = e.toString();
+      print('Error fetching unlocked artworks: $_error');
+      rethrow;
     }
   }
 } 

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 
 
@@ -206,60 +207,33 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
   }
 
   Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate() && _imageFile != null) {
+    if (_imageFile != null) {
       setState(() {
         _isLoading = true;
       });
       
       try {
-        final authProvider = context.read<AuthProvider>();
-        final username = authProvider.user?.username ?? 'Unknown Artist';
-        final userId = authProvider.user?.id.toString() ?? '0';
+        List<int> bytes = await _imageFile!.readAsBytes();
+        String filename = _imageFile!.name;
         
-        FormData formData;
-        if (kIsWeb) {
-          List<int> bytes = await _imageFile!.readAsBytes();
-          formData = FormData.fromMap({
-            'title': _titleController.text,
-            'description': _descriptionController.text,
-            'latitude': widget.latitude,
-            'longitude': widget.longitude,
-            'category': _selectedCategory,
-            'artist_name': username,
-            'artist_id': userId,
-            'image': MultipartFile.fromBytes(
-              bytes,
-              filename: _imageFile!.name,
-            ),
-          });
-        } else {
-          formData = FormData.fromMap({
-            'title': _titleController.text,
-            'description': _descriptionController.text,
-            'latitude': widget.latitude,
-            'longitude': widget.longitude,
-            'category': _selectedCategory,
-            'artist_name': username,
-            'artist_id': userId,
-            'image': await MultipartFile.fromFile(_imageFile!.path),
-          });
-        }
+        FormData formData = FormData.fromMap({
+          'title': _titleController.text,
+          'description': _descriptionController.text,
+          'latitude': widget.latitude,
+          'longitude': widget.longitude,
+          'image': MultipartFile.fromBytes(
+            bytes,
+            filename: filename,
+          ),
+        });
 
-        await context.read<ArtworkProvider>().addArtwork(formData, username);
+        await context.read<ArtworkProvider>().addArtwork(formData, '');
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Artwork added successfully!')),
-          );
           Navigator.of(context).pop();
         }
       } catch (e) {
         print('Error in _submitForm: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error uploading artwork: $e')),
-          );
-        }
       } finally {
         if (mounted) {
           setState(() {
@@ -267,10 +241,6 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
           });
         }
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields and select an image')),
-      );
     }
   }
 

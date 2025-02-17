@@ -1,13 +1,23 @@
 import 'package:dio/dio.dart';
+import 'package:frontend/services/api_service.dart';
 import '../models/artwork_model.dart';
+import '../models/comment_model.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:io';
+
 
 class ArtworkService {
   final Dio _dio;
   final String? authToken;
 
-  ArtworkService(this._dio, {this.authToken});
+  ArtworkService(this._dio, {this.authToken}) {
+    _dio.options.baseUrl = ApiService.baseUrl;  // Use the dynamic base URL
+    if (authToken != null) {
+      _dio.options.headers = {
+        'Authorization': 'Bearer $authToken',
+      };
+    }
+  }
 
   Future<List<Artwork>> getNearbyArtworks(double latitude, double longitude) async {
     try {
@@ -16,52 +26,78 @@ class ArtworkService {
         queryParameters: {
           'latitude': latitude,
           'longitude': longitude,
-          'radius': 5.0,
         },
-        options: Options(
-          headers: authToken != null ? {'Authorization': 'Bearer $authToken'} : null,
-        ),
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> artworksJson = response.data;
-        return artworksJson.map((json) {
-          try {
-            final distance = Geolocator.distanceBetween(
-              latitude,
-              longitude,
-              json['latitude'] is String ? double.parse(json['latitude']) : json['latitude'],
-              json['longitude'] is String ? double.parse(json['longitude']) : json['longitude'],
-            );
-            return Artwork.fromJson(json, distanceFromUser: distance);
-          } catch (e) {
-            print('Error parsing artwork: $e');
-            print('Raw JSON: $json');
-            rethrow;
+        final List<dynamic> data = response.data;
+        return data.map((json) {
+          // Ensure the image URL is properly formatted
+          if (json['image_url'] != null) {
+            json['image_url'] = ApiService.getImageUrl(json['image_url']);
           }
+          return Artwork.fromJson(json);
         }).toList();
       }
-      throw Exception('Failed to load artworks: ${response.statusCode}');
+      throw Exception('Failed to load nearby artworks');
     } catch (e) {
-      print('Error in getNearbyArtworks: $e');
+      print('Error getting nearby artworks: $e');
       rethrow;
     }
   }
 
   Future<List<Artwork>> getUnlockedArtworks() async {
     try {
-      final response = await _dio.get(
-        '/artworks/unlocked',
+      // First get the unlocked artworks
+      final unlockedResponse = await _dio.get(
+        '/artworks/user/unlocked',
         options: Options(
           headers: {'Authorization': 'Bearer $authToken'},
         ),
       );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> artworksJson = response.data;
-        return artworksJson.map((json) => Artwork.fromJson(json)).toList();
+      if (unlockedResponse.statusCode == 200) {
+        final List<dynamic> artworksJson = unlockedResponse.data;
+        
+        // Get artist details for each artwork
+        List<Artwork> artworks = [];
+        for (var json in artworksJson) {
+          // Get artist details
+          final artistId = json['artist_id'];
+          String artistName = 'Unknown Artist';
+          
+          try {
+            final artistResponse = await _dio.get(
+              '/users/$artistId',
+              options: Options(
+                headers: {'Authorization': 'Bearer $authToken'},
+              ),
+            );
+            
+            if (artistResponse.statusCode == 200) {
+              artistName = artistResponse.data['username'] ?? 'Unknown Artist';
+            }
+          } catch (e) {
+            print('Error getting artist details: $e');
+          }
+
+          // Ensure the image URL is properly formatted
+          if (json['image_url'] != null) {
+            json['image_url'] = ApiService.getImageUrl(json['image_url']);
+          }
+          
+          artworks.add(Artwork.fromJson(
+            json,
+            isUnlocked: true,
+            artistName: artistName,
+          ));
+        }
+        
+        return artworks;
       }
-      throw Exception('Failed to load unlocked artworks');
+      
+      print('Error response: ${unlockedResponse.data}');
+      throw Exception('Failed to load unlocked artworks: ${unlockedResponse.statusCode}');
     } catch (e) {
       print('Error getting unlocked artworks: $e');
       rethrow;
@@ -70,19 +106,20 @@ class ArtworkService {
 
   Future<bool> unlockArtwork(int artworkId) async {
     try {
-      print('Attempting to unlock artwork: $artworkId');
       final response = await _dio.post(
         '/artworks/unlock',
-        data: {
-          'artwork_id': artworkId,
-        },
+        data: {'artwork_id': artworkId},
         options: Options(
           headers: {'Authorization': 'Bearer $authToken'},
         ),
       );
       
-      print('Unlock response: ${response.data}');
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        // After successful unlock, refresh the unlocked artworks list
+        await getUnlockedArtworks();
+        return true;
+      }
+      return false;
     } catch (e) {
       print('Error unlocking artwork: $e');
       rethrow;
@@ -125,27 +162,19 @@ class ArtworkService {
     }
   }
 
-  Future<void> createArtwork(FormData formData, String artistName) async {
+  Future<void> createArtwork(FormData formData) async {
     try {
-      print('Sending artwork data: ${formData.fields}');
-      
-      // Add artist name to form data
-      formData.fields.add(MapEntry('artist_name', artistName));
-      
       final response = await _dio.post(
-        '/artworks',
+        '/artworks/',
         data: formData,
         options: Options(
           headers: {
-            'Authorization': 'Bearer $authToken',
+            if (authToken != null) 'Authorization': 'Bearer $authToken',
           },
         ),
       );
       
-      print('Response status: ${response.statusCode}');
-      print('Response data: ${response.data}');
-      
-      if (response.statusCode != 201) {
+      if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception('Failed to create artwork: ${response.statusCode}');
       }
     } catch (e) {
@@ -168,6 +197,80 @@ class ArtworkService {
       }
     } catch (e) {
       print('Error in deleteArtwork service: $e');
+      rethrow;
+    }
+  }
+
+  // Add like to artwork
+  Future<bool> likeArtwork(int artworkId) async {
+    try {
+      final response = await _dio.post(
+        '/artworks/$artworkId/like',
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error liking artwork: $e');
+      rethrow;
+    }
+  }
+
+  // Remove like from artwork
+  Future<bool> unlikeArtwork(int artworkId) async {
+    try {
+      final response = await _dio.delete(
+        '/artworks/$artworkId/like',
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error unliking artwork: $e');
+      rethrow;
+    }
+  }
+
+  // Get comments for artwork
+  Future<List<Comment>> getComments(int artworkId) async {
+    try {
+      final response = await _dio.get(
+        '/artworks/$artworkId/comments',
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> commentsJson = response.data;
+        return commentsJson.map((json) => Comment.fromJson(json)).toList();
+      }
+      throw Exception('Failed to load comments');
+    } catch (e) {
+      print('Error getting comments: $e');
+      rethrow;
+    }
+  }
+
+  // Add comment to artwork
+  Future<Comment> addComment(int artworkId, String content) async {
+    try {
+      final response = await _dio.post(
+        '/artworks/$artworkId/comments',
+        data: {'text': content},
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        return Comment.fromJson(response.data);
+      }
+      throw Exception('Failed to add comment');
+    } catch (e) {
+      print('Error adding comment: $e');
       rethrow;
     }
   }
