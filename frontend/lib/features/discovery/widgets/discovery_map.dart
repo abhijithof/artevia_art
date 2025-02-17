@@ -56,8 +56,8 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
     }
   }
 
-  Widget _buildArtworkMarker(Artwork artwork) {
-    final bool canBeUnlocked = artwork.canBeUnlocked && !artwork.isUnlocked;
+  Widget _buildArtworkMarker(Artwork artwork, AuthProvider authProvider) {
+    final bool isUserArtwork = artwork.artistId == authProvider.user?.id;
     
     return GestureDetector(
       onTap: () => _showArtworkDetails(artwork),
@@ -65,7 +65,11 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: artwork.isUnlocked ? Colors.green.withOpacity(0.8) : Colors.red.withOpacity(0.8),
+          color: isUserArtwork 
+            ? Colors.blue.withOpacity(0.8)
+            : artwork.isUnlocked 
+              ? Colors.green.withOpacity(0.8) 
+              : Colors.red.withOpacity(0.8),
           shape: BoxShape.circle,
           border: Border.all(
             color: Colors.white,
@@ -73,7 +77,11 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
           ),
         ),
         child: Icon(
-          artwork.isUnlocked ? Icons.palette : Icons.lock,
+          isUserArtwork 
+            ? Icons.palette
+            : artwork.isUnlocked 
+              ? Icons.lock_open 
+              : Icons.lock,
           color: Colors.white,
           size: 24,
         ),
@@ -138,7 +146,7 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
                         width: 40,
                         height: 40,
                         point: LatLng(artwork.latitude, artwork.longitude),
-                        child: _buildArtworkMarker(artwork),
+                        child: _buildArtworkMarker(artwork, authProvider),
                       );
                     }).toList(),
                   ],

@@ -32,4 +32,16 @@ class Artwork(ArtworkBase):
         from_attributes = True
 
 class ArtworkResponse(Artwork):
-    categories: List[str] = [] 
+    categories: List[str] = []
+
+class UnlockedArtworkCreate(BaseModel):
+    artwork_id: int
+
+class UnlockedArtwork(BaseModel):
+    id: int
+    user_id: int
+    artwork_id: int
+    unlocked_at: datetime
+
+    class Config:
+        from_attributes = True 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../discovery/widgets/discovery_map.dart';
 import '../../artworks/providers/artwork_provider.dart';
+import '../../artworks/screens/collection_screen.dart';
+import '../../artworks/screens/unlocked_artworks_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -41,17 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: [
-          Consumer<ArtworkProvider>(
-            builder: (context, provider, child) {
-              return const DiscoveryMap();
-            },
-          ),
-          const Center(child: Text('Collection')),
-          const ProfileScreen(),
+        children: const [
+          DiscoveryMap(),
+          CollectionScreen(),
+          UnlockedArtworksScreen(),
+          ProfileScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
@@ -60,15 +60,23 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.map),
+            icon: Icon(Icons.map_outlined),
+            activeIcon: Icon(Icons.map),
             label: 'Discover',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.collections),
-            label: 'Collection',
+            icon: Icon(Icons.palette_outlined),
+            activeIcon: Icon(Icons.palette),
+            label: 'My Art',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
+            icon: Icon(Icons.lock_open_outlined),
+            activeIcon: Icon(Icons.lock_open),
+            label: 'Unlocked',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
             label: 'Profile',
           ),
         ],

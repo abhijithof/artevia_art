@@ -144,3 +144,16 @@ class ModerationLog(Base):
 
     # Relationship with admin
     admin = relationship("User")
+
+# Add this after the existing models
+class UnlockedArtwork(Base):
+    __tablename__ = "unlocked_artworks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    artwork_id = Column(Integer, ForeignKey("artworks.id"))
+    unlocked_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", backref="unlocked_artworks")
+    artwork = relationship("Artwork", backref="unlocked_by")

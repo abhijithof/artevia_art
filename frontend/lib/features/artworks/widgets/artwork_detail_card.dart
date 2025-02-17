@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../models/artwork_model.dart';
+
 
 class ArtworkDetailCard extends StatelessWidget {
   final Artwork artwork;
@@ -13,28 +16,26 @@ class ArtworkDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final bool isUserArtwork = artwork.artistId == authProvider.user?.id;
+
     return Card(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Basic info always visible
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
+          ListTile(
+            title: Text(artwork.title),
+            subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  artwork.title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                Text('By ${artwork.artistName}'),
-                Text('Distance: ${(artwork.distanceFromUser / 1000).toStringAsFixed(2)} km'),
+                Text(artwork.description),
+                const SizedBox(height: 8),
+                Text('Artist: ${artwork.artistName}'),
+                Text('Distance: ${artwork.distanceFromUser.toStringAsFixed(2)} km'),
               ],
             ),
           ),
-
-          // Unlock button if within range
-          if (artwork.canBeUnlocked && !artwork.isUnlocked)
+          if (!isUserArtwork && !artwork.isUnlocked)
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: ElevatedButton(
@@ -42,22 +43,6 @@ class ArtworkDetailCard extends StatelessWidget {
                 child: const Text('Unlock Artwork'),
               ),
             ),
-
-          // Full details only if unlocked
-          if (artwork.isUnlocked) ...[
-            if (artwork.imageUrl != null)
-              Image.network(
-                artwork.imageUrl!,
-                fit: BoxFit.cover,
-                height: 200,
-                width: double.infinity,
-              ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(artwork.description),
-            ),
-            // Social features would go here
-          ],
         ],
       ),
     );

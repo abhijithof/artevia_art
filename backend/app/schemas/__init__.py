@@ -1,4 +1,11 @@
-from .artwork import ArtworkBase, ArtworkCreate, Artwork, ArtworkResponse, ArtworkUpdate
+from .artwork import (
+    ArtworkBase,
+    ArtworkCreate,
+    ArtworkUpdate,
+    ArtworkResponse,
+    UnlockedArtworkCreate,
+    UnlockedArtwork,
+)
 from .user import User, UserCreate, UserUpdate, UserInDB, UserProfile
 from .token import Token, TokenData
 from .pagination import Page

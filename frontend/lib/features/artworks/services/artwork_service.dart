@@ -48,15 +48,40 @@ class ArtworkService {
     }
   }
 
-  // Add unlock artwork endpoint
-  Future<bool> unlockArtwork(int artworkId) async {
+  Future<List<Artwork>> getUnlockedArtworks() async {
     try {
-      final response = await _dio.post(
-        '/artworks/$artworkId/unlock',
+      final response = await _dio.get(
+        '/artworks/unlocked',
         options: Options(
           headers: {'Authorization': 'Bearer $authToken'},
         ),
       );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> artworksJson = response.data;
+        return artworksJson.map((json) => Artwork.fromJson(json)).toList();
+      }
+      throw Exception('Failed to load unlocked artworks');
+    } catch (e) {
+      print('Error getting unlocked artworks: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> unlockArtwork(int artworkId) async {
+    try {
+      print('Attempting to unlock artwork: $artworkId');
+      final response = await _dio.post(
+        '/artworks/unlock',
+        data: {
+          'artwork_id': artworkId,
+        },
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+      
+      print('Unlock response: ${response.data}');
       return response.statusCode == 200;
     } catch (e) {
       print('Error unlocking artwork: $e');
@@ -100,9 +125,13 @@ class ArtworkService {
     }
   }
 
-  Future<void> createArtwork(FormData formData) async {
+  Future<void> createArtwork(FormData formData, String artistName) async {
     try {
       print('Sending artwork data: ${formData.fields}');
+      
+      // Add artist name to form data
+      formData.fields.add(MapEntry('artist_name', artistName));
+      
       final response = await _dio.post(
         '/artworks',
         data: formData,
@@ -121,6 +150,24 @@ class ArtworkService {
       }
     } catch (e) {
       print('Error creating artwork: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteArtwork(int id) async {
+    try {
+      final response = await _dio.delete(
+        '/artworks/$id',
+        options: Options(
+          headers: {'Authorization': 'Bearer $authToken'},
+        ),
+      );
+      
+      if (response.statusCode != 204) {
+        throw Exception('Failed to delete artwork: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error in deleteArtwork service: $e');
       rethrow;
     }
   }

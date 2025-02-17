@@ -11,12 +11,21 @@ class ArtworkProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   Position? _currentPosition;
+  List<Artwork> _unlockedArtworks = [];
 
   ArtworkProvider(this._artworkService);
 
   List<Artwork> get artworks => _artworks;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  List<Artwork> get unlockedArtworks => _unlockedArtworks;
+
+  Future<void> init() async {
+    await Future.wait([
+      fetchNearbyArtworks(_currentPosition?.latitude ?? 0, _currentPosition?.longitude ?? 0),
+      fetchUnlockedArtworks(),
+    ]);
+  }
 
   Future<void> fetchNearbyArtworks(double latitude, double longitude) async {
     try {
@@ -41,28 +50,30 @@ class ArtworkProvider extends ChangeNotifier {
 
       final success = await _artworkService.unlockArtwork(id);
       if (success) {
-        // Update the artwork in the list
-        final artwork = await _artworkService.getArtworkDetails(id);
+        await fetchUnlockedArtworks();
+        
         final index = _artworks.indexWhere((a) => a.id == id);
         if (index != -1) {
-          _artworks[index] = artwork;
+          _artworks[index] = _artworks[index].copyWith(isUnlocked: true);
         }
       }
     } catch (e) {
       _error = e.toString();
+      print('Error unlocking artwork: $_error');
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> addArtwork(FormData formData) async {
+  Future<void> addArtwork(FormData formData, String artistName) async {
     try {
       _isLoading = true;
       _error = null;
       notifyListeners();
 
-      await _artworkService.createArtwork(formData);
+      await _artworkService.createArtwork(formData, artistName);
 
       // Force refresh nearby artworks
       if (_currentPosition != null) {
@@ -102,6 +113,45 @@ class ArtworkProvider extends ChangeNotifier {
     } catch (e) {
       print('Error getting categories: $e');
       rethrow;
+    }
+  }
+
+  Future<void> deleteArtwork(int id) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _artworkService.deleteArtwork(id);
+      
+      // Remove from local list
+      _artworks.removeWhere((artwork) => artwork.id == id);
+      
+      // Refresh the artworks list
+      if (_currentPosition != null) {
+        await fetchNearbyArtworks(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+        );
+      }
+      
+    } catch (e) {
+      _error = e.toString();
+      print('Error in deleteArtwork: $_error');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchUnlockedArtworks() async {
+    try {
+      _unlockedArtworks = await _artworkService.getUnlockedArtworks();
+      notifyListeners();
+    } catch (e) {
+      print('Error fetching unlocked artworks: $e');
+      _error = e.toString();
     }
   }
 } 

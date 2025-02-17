@@ -7,6 +7,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
+import '../../auth/providers/auth_provider.dart';
+
+
 
 class AddArtworkForm extends StatefulWidget {
   final double latitude;
@@ -209,9 +212,12 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
       });
       
       try {
+        final authProvider = context.read<AuthProvider>();
+        final username = authProvider.user?.username ?? 'Unknown Artist';
+        final userId = authProvider.user?.id.toString() ?? '0';
+        
         FormData formData;
         if (kIsWeb) {
-          // For web platform
           List<int> bytes = await _imageFile!.readAsBytes();
           formData = FormData.fromMap({
             'title': _titleController.text,
@@ -219,27 +225,28 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
             'latitude': widget.latitude,
             'longitude': widget.longitude,
             'category': _selectedCategory,
+            'artist_name': username,
+            'artist_id': userId,
             'image': MultipartFile.fromBytes(
               bytes,
               filename: _imageFile!.name,
             ),
           });
         } else {
-          // For mobile platforms
           formData = FormData.fromMap({
             'title': _titleController.text,
             'description': _descriptionController.text,
             'latitude': widget.latitude,
             'longitude': widget.longitude,
             'category': _selectedCategory,
+            'artist_name': username,
+            'artist_id': userId,
             'image': await MultipartFile.fromFile(_imageFile!.path),
           });
         }
 
-        // Submit using your artwork service
-        await context.read<ArtworkProvider>().addArtwork(formData);
+        await context.read<ArtworkProvider>().addArtwork(formData, username);
         
-        // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Artwork added successfully!')),
