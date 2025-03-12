@@ -3,7 +3,7 @@ class Comment {
   final int artworkId;
   final int userId;
   final String username;
-  final String content;
+  final String text;
   final String createdAt;
 
   Comment({
@@ -11,7 +11,7 @@ class Comment {
     required this.artworkId,
     required this.userId,
     required this.username,
-    required this.content,
+    required this.text,
     required this.createdAt,
   });
 
@@ -21,7 +21,7 @@ class Comment {
       artworkId: json['artwork_id'],
       userId: json['user_id'],
       username: json['username'],
-      content: json['content'],
+      text: json['text'],
       createdAt: json['created_at'],
     );
   }

@@ -17,6 +17,9 @@ class ArtworkService {
         'Authorization': 'Bearer $authToken',
       };
     }
+    _dio.options.connectTimeout = const Duration(seconds: 5);
+    _dio.options.receiveTimeout = const Duration(seconds: 3);
+    _dio.options.sendTimeout = const Duration(seconds: 3);
   }
 
   Future<List<Artwork>> getNearbyArtworks(double latitude, double longitude) async {
@@ -236,42 +239,39 @@ class ArtworkService {
   // Get comments for artwork
   Future<List<Comment>> getComments(int artworkId) async {
     try {
-      final response = await _dio.get(
-        '/artworks/$artworkId/comments',
-        options: Options(
-          headers: {'Authorization': 'Bearer $authToken'},
-        ),
-      );
-
+      final response = await _dio.get('/artworks/$artworkId/comments');
       if (response.statusCode == 200) {
-        final List<dynamic> commentsJson = response.data;
-        return commentsJson.map((json) => Comment.fromJson(json)).toList();
+        final List<dynamic> data = response.data;
+        return data.map((json) => Comment.fromJson(json)).toList();
       }
-      throw Exception('Failed to load comments');
+      return [];
     } catch (e) {
       print('Error getting comments: $e');
-      rethrow;
+      return [];
     }
   }
 
   // Add comment to artwork
-  Future<Comment> addComment(int artworkId, String content) async {
+  Future<Comment?> addComment(int artworkId, String text) async {
     try {
       final response = await _dio.post(
         '/artworks/$artworkId/comments',
-        data: {'text': content},
+        data: {'text': text},
         options: Options(
           headers: {'Authorization': 'Bearer $authToken'},
         ),
       );
-
+      
       if (response.statusCode == 200) {
-        return Comment.fromJson(response.data);
+        final data = response.data;
+        // Provide a default username if none is provided
+        data['username'] = data['username'] ?? 'Unknown User';
+        return Comment.fromJson(data);
       }
-      throw Exception('Failed to add comment');
+      return null;
     } catch (e) {
       print('Error adding comment: $e');
-      rethrow;
+      return null;
     }
   }
 } 

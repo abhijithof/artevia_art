@@ -54,12 +54,12 @@ async def unlike_artwork(
     return {"message": "Artwork unliked"}
 
 # Comments
-@router.post("/artworks/{artwork_id}/comments", response_model=schemas.Comment)
+@router.post("/artworks/{artwork_id}/comments")
 async def create_comment(
     artwork_id: int,
     comment: schemas.CommentCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_comment = models.Comment(
         text=comment.text,
@@ -67,19 +67,43 @@ async def create_comment(
         artwork_id=artwork_id
     )
     db.add(db_comment)
-    db.commit()
-    db.refresh(db_comment)
-    return db_comment
+    await db.commit()
+    await db.refresh(db_comment)
+    
+    # Include username in response
+    return {
+        "id": db_comment.id,
+        "text": db_comment.text,
+        "user_id": db_comment.user_id,
+        "artwork_id": db_comment.artwork_id,
+        "created_at": db_comment.created_at,
+        "username": current_user.username  # Add username here
+    }
 
 @router.get("/artworks/{artwork_id}/comments")
 async def get_artwork_comments(
     artwork_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(models.Comment).where(models.Comment.artwork_id == artwork_id)
+    query = (
+        select(models.Comment, models.User.username)
+        .join(models.User, models.Comment.user_id == models.User.id)
+        .where(models.Comment.artwork_id == artwork_id)
+    )
     result = await db.execute(query)
-    comments = result.scalars().all()
-    return comments
+    comments = result.all()
+    
+    return [
+        {
+            "id": comment[0].id,
+            "text": comment[0].text,
+            "user_id": comment[0].user_id,
+            "artwork_id": comment[0].artwork_id,
+            "created_at": comment[0].created_at,
+            "username": comment[1]
+        }
+        for comment in comments
+    ]
 
 @router.get("/likes", response_model=List[schemas.ArtworkResponse])
 async def get_liked_artworks(

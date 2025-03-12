@@ -22,6 +22,7 @@ class ArtworkDetailCard extends StatefulWidget {
 
 class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
   final TextEditingController _commentController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   List<Comment> _comments = [];
   bool _isLiked = false;
   bool _isLoading = false;
@@ -79,10 +80,12 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
         _commentController.text,
       );
       
-      setState(() {
-        _comments.add(comment);
-        _commentController.clear();
-      });
+      if (comment != null) {
+        setState(() {
+          _comments.add(comment);
+          _commentController.clear();
+        });
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
@@ -92,119 +95,146 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final bool isUserArtwork = widget.artwork.artistId == authProvider.user?.id;
-    
-    // Get the artist name from auth provider if it's the user's artwork
-    final displayArtistName = isUserArtwork 
-        ? authProvider.user?.username 
-        : widget.artwork.artistName;
-
     return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.5,
-      maxChildSize: 0.9,
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
-          color: Colors.white,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
+              // Handle bar at the top
               Container(
-                height: 200,
-                width: double.infinity,
-                child: widget.artwork.imageUrl != null && widget.artwork.imageUrl!.isNotEmpty
-                    ? Image.network(
-                        ApiService.getImageUrl(widget.artwork.imageUrl),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          print('Error loading image: $error');
-                          return const Center(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Artwork details section
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.artwork.title,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'by ${widget.artwork.artistName}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.artwork.description,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(),
+
+              // Comments section
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.separated(
+                        controller: scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _comments.length,
+                        separatorBuilder: (context, index) => const Divider(),
+                        itemBuilder: (context, index) {
+                          final comment = _comments[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
-                                Text('Image not available', style: TextStyle(color: Colors.grey)),
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      child: Text(
+                                        comment.username[0].toUpperCase(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      comment.username,
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(comment.text),
                               ],
                             ),
                           );
                         },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(child: CircularProgressIndicator());
-                        },
-                      )
-                    : const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
-                            Text('No image available', style: TextStyle(color: Colors.grey)),
-                          ],
-                        ),
                       ),
               ),
-              ListTile(
-                title: Text(widget.artwork.title),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.artwork.description),
-                    const SizedBox(height: 8),
-                    Text('Artist: ${displayArtistName ?? "Unknown Artist"}'),
-                    if (!widget.artwork.isUnlocked)
-                      Text('Distance: ${widget.artwork.distanceFromUser.toStringAsFixed(2)} km'),
-                  ],
-                ),
-              ),
-              if (!isUserArtwork && !widget.artwork.isUnlocked)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ElevatedButton(
-                    onPressed: () => widget.onUnlock(widget.artwork.id),
-                    child: const Text('Unlock Artwork'),
-                  ),
-                ),
-              IconButton(
-                icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border),
-                color: _isLiked ? Colors.red : null,
-                onPressed: _toggleLike,
-              ),
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: _comments.length,
-                        itemBuilder: (context, index) {
-                          final comment = _comments[index];
-                          return ListTile(
-                            title: Text(comment.username),
-                            subtitle: Text(comment.content),
-                          );
-                        },
-                      ),
-              ),
-              Padding(
+
+              // Comment input section
+              Container(
                 padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom + 8,
-                  left: 8,
-                  right: 8,
+                  left: 16,
+                  right: 16,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                  top: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.grey[300]!,
+                      width: 1,
+                    ),
+                  ),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _commentController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Add a comment...',
-                          border: OutlineInputBorder(),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                         ),
+                        maxLines: null,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     IconButton(
-                      icon: const Icon(Icons.send),
+                      icon: const Icon(Icons.send_rounded),
                       onPressed: _addComment,
+                      color: Theme.of(context).primaryColor,
                     ),
                   ],
                 ),

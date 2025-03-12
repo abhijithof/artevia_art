@@ -37,19 +37,23 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
       }
 
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5)
       );
 
       if (mounted) {
         setState(() => _currentPosition = position);
         
-        final provider = Provider.of<ArtworkProvider>(context, listen: false);
-        await provider.updateCurrentPosition(position);
-
+        // Update map position first
         _mapController.move(
           LatLng(position.latitude, position.longitude),
           15.0,
         );
+
+        // Then update the ArtworkProvider and fetch new artworks
+        final provider = Provider.of<ArtworkProvider>(context, listen: false);
+        await provider.updateCurrentPosition(position);
+        await provider.refreshArtworks();
       }
     } catch (e) {
       print('Error getting location: $e');
