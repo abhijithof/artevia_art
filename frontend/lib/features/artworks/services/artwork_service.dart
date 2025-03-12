@@ -274,4 +274,17 @@ class ArtworkService {
       return null;
     }
   }
+
+  Future<int> getLikeCount(int artworkId) async {
+    try {
+      final response = await _dio.get('/artworks/$artworkId/likes/count');
+      if (response.statusCode == 200) {
+        return response.data['count'];
+      }
+      return 0;
+    } catch (e) {
+      print('Error getting like count: $e');
+      return 0;
+    }
+  }
 } 

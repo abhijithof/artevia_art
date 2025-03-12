@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List
 from .. import models, schemas
 from ..database import get_db
@@ -115,4 +115,16 @@ async def get_liked_artworks(
         .join(Like)
         .filter(Like.user_id == current_user.id)
     )
-    return result.scalars().all() 
+    return result.scalars().all()
+
+@router.get("/artworks/{artwork_id}/likes/count")
+async def get_artwork_like_count(
+    artwork_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(func.count(models.Like.id)).where(
+        models.Like.artwork_id == artwork_id
+    )
+    result = await db.execute(query)
+    count = result.scalar()
+    return {"count": count} 

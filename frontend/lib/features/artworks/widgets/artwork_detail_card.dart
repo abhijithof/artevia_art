@@ -26,12 +26,14 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
   List<Comment> _comments = [];
   bool _isLiked = false;
   bool _isLoading = false;
+  int _likeCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadComments();
     _checkIfLiked();
+    _getLikeCount();
   }
 
   Future<void> _loadComments() async {
@@ -53,6 +55,16 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
     // Implement check if user has liked artwork
   }
 
+  Future<void> _getLikeCount() async {
+    try {
+      final artworkProvider = Provider.of<ArtworkProvider>(context, listen: false);
+      final count = await artworkProvider.artworkService.getLikeCount(widget.artwork.id);
+      setState(() => _likeCount = count);
+    } catch (e) {
+      print('Error getting like count: $e');
+    }
+  }
+
   Future<void> _toggleLike() async {
     try {
       final artworkProvider = Provider.of<ArtworkProvider>(context, listen: false);
@@ -61,7 +73,10 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
           : await artworkProvider.artworkService.likeArtwork(widget.artwork.id);
       
       if (success) {
-        setState(() => _isLiked = !_isLiked);
+        setState(() {
+          _isLiked = !_isLiked;
+          _likeCount += _isLiked ? 1 : -1;
+        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -146,6 +161,24 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
                     Text(
                       widget.artwork.description,
                       style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              _isLiked ? Icons.favorite : Icons.favorite_border,
+                              color: _isLiked ? Colors.red : null,
+                            ),
+                            onPressed: _toggleLike,
+                          ),
+                          Text(
+                            '$_likeCount likes',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
