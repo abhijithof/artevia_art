@@ -157,3 +157,14 @@ class UnlockedArtwork(Base):
     # Relationships
     user = relationship("User", backref="unlocked_artworks")
     artwork = relationship("Artwork", backref="unlocked_by")
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_email = Column(String)
+    action = Column(String)  # login, create, update, delete
+    details = Column(Text)
+    ip_address = Column(String)
+    level = Column(String, default="INFO")  # INFO, WARNING, ERROR
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())

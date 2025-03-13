@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 from . import models
-from .database import engine, get_db, Base
+from .database import engine, get_db, Base, init_categories
 from .routers import users, auth, artworks, social, discoveries, categories, admin, profiles
 import os
 
@@ -31,7 +31,7 @@ os.makedirs(uploads_dir, exist_ok=True)
 
 # Mount both directories
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 print(f"Static directory: {static_dir}")
 print(f"Uploads directory: {uploads_dir}")
@@ -55,6 +55,8 @@ async def create_tables():
 @app.on_event("startup")
 async def startup_event():
     await create_tables()
+    async with AsyncSession(engine) as session:
+        await init_categories(session)
 
 # Basic test route
 @app.get("/")

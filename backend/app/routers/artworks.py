@@ -13,29 +13,17 @@ from ..schemas.pagination import Page
 from sqlalchemy.orm import selectinload, joinedload
 from ..schemas.artwork import Artwork, ArtworkCreate, ArtworkResponse
 from datetime import datetime
+from ..constants import PREDEFINED_CATEGORIES
 
 router = APIRouter(
     prefix="/artworks",
     tags=["artworks"]
 )
 
-# Predefined categories
-PREDEFINED_CATEGORIES = [
-    "Mural",
-    "Graffiti",
-    "Sculpture",
-    "Installation",
-    "Street Art",
-    "Digital Art",
-    "Mixed Media",
-    "Traditional",
-]
-
 # First, endpoint to get categories for the dropdown
 @router.get("/categories")
 async def get_categories(db: AsyncSession = Depends(get_db)):
     try:
-        # For now, just return predefined categories
         return PREDEFINED_CATEGORIES
     except Exception as e:
         print(f"Error getting categories: {str(e)}")
@@ -55,11 +43,12 @@ async def create_artwork(
     latitude: float = Form(...),
     longitude: float = Form(...),
     image: UploadFile = File(...),
+    category: str = Form(...),
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
-        # Just save the image, no complex validation
+        # Save image first
         image_path = await save_uploaded_file(image)
         
         # Create new artwork
@@ -73,9 +62,22 @@ async def create_artwork(
             status="active"
         )
         
+        # Get category
+        result = await db.execute(
+            select(models.Category).where(models.Category.name == category)
+        )
+        category_obj = result.scalar_one_or_none()
+        
+        if not category_obj:
+            category_obj = models.Category(name=category)
+            db.add(category_obj)
+        
+        # Add artwork and link category
         db.add(new_artwork)
+        new_artwork.categories = [category_obj]
+        
+        # Commit changes
         await db.commit()
-        await db.refresh(new_artwork)
         
         return {
             "id": new_artwork.id,
@@ -89,11 +91,12 @@ async def create_artwork(
             "status": new_artwork.status,
             "is_featured": new_artwork.is_featured,
             "created_at": new_artwork.created_at,
-            "categories": []
+            "categories": [category]
         }
+
     except Exception as e:
-        await db.rollback()
         print(f"Error creating artwork: {e}")
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

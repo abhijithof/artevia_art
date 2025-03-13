@@ -36,3 +36,32 @@ async def login(
     except Exception as e:
         print(f"Login error: {str(e)}")  # Debug print
         raise 
+
+@router.post("/admin/login")
+async def admin_login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(models.User).filter(models.User.email == form_data.username)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+    
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized. Admin access only."
+        )
+    
+    access_token = create_access_token(data={"sub": user.email})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role
+    } 

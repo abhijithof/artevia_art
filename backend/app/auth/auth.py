@@ -4,13 +4,13 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from ..database import get_db
 from .. import models
 
 # Security configuration
-SECRET_KEY = "your-secret-key-keep-it-secret"  # In production, use environment variable
+SECRET_KEY = "your-secret-key"  # Change this in production!
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
@@ -33,10 +33,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
-):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -49,11 +46,14 @@ async def get_current_user(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-
-    query = select(models.User).where(models.User.email == email)
-    result = await db.execute(query)
+        
+    result = await db.execute(select(models.User).filter(models.User.email == email))
     user = result.scalar_one_or_none()
-    
     if user is None:
         raise credentials_exception
-    return user 
+    return user
+
+async def get_current_active_user(current_user: models.User = Depends(get_current_user)):
+    if not current_user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user 

@@ -168,6 +168,7 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
                     return null;
                   },
                   onChanged: (String? newValue) {
+                    print('Selected category: $newValue');
                     setState(() {
                       _selectedCategory = newValue;
                     });
@@ -207,7 +208,8 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
   }
 
   Future<void> _submitForm() async {
-    if (_imageFile != null) {
+    if (_formKey.currentState!.validate() && _imageFile != null) {
+      print('Selected category before submission: $_selectedCategory');
       setState(() {
         _isLoading = true;
       });
@@ -219,13 +221,16 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
         FormData formData = FormData.fromMap({
           'title': _titleController.text,
           'description': _descriptionController.text,
-          'latitude': widget.latitude,
-          'longitude': widget.longitude,
+          'latitude': widget.latitude.toString(),
+          'longitude': widget.longitude.toString(),
           'image': MultipartFile.fromBytes(
             bytes,
             filename: filename,
           ),
+          'category': _selectedCategory,
         });
+
+        print('Form data: ${formData.fields}');
 
         await context.read<ArtworkProvider>().addArtwork(formData, '');
         
@@ -234,6 +239,11 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
         }
       } catch (e) {
         print('Error in _submitForm: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error uploading artwork: $e')),
+          );
+        }
       } finally {
         if (mounted) {
           setState(() {
