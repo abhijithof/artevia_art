@@ -24,10 +24,10 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     profile_picture = Column(String, nullable=True)
-    bio = Column(Text, nullable=True)
+    bio = Column(String, nullable=True)
     website = Column(String, nullable=True)
     location = Column(String, nullable=True)
-    social_links = Column(String, nullable=True)
+    social_links = Column(JSON, nullable=True)
     ban_reason = Column(String, nullable=True)
 
     # Existing relationships
