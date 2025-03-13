@@ -16,11 +16,15 @@ app = FastAPI(title="Artevia API")
 # Update CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=[
+        "http://localhost",  # PHP admin panel
+        "http://localhost:3000",  # Frontend
+        "*"  # In development only - remove in production
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    max_age=3600,  # Add this to cache preflight requests
+    expose_headers=["*"],
 )
 
 # Create both static and uploads directories

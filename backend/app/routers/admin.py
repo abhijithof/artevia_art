@@ -4,7 +4,12 @@ from typing import List, Optional
 from .. import models, schemas
 from ..database import get_db
 from ..auth import get_current_user
-from datetime import datetime
+from datetime import datetime, timedelta
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, text
+from ..auth.auth import verify_password, create_access_token
+from sqlalchemy.orm import joinedload
 
 router = APIRouter(
     prefix="/admin",
@@ -22,75 +27,130 @@ async def get_current_admin(
     return current_user
 
 # User Management
-@router.get("/users", response_model=List[schemas.UserProfile])
-async def list_users(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
+@router.get("/users")
+async def get_admin_users(
+    db: AsyncSession = Depends(get_db),
     admin: models.User = Depends(get_current_admin)
 ):
-    users = db.query(models.User).offset(skip).limit(limit).all()
-    return users
+    try:
+        # Get users with artwork count
+        result = await db.execute(
+            select(
+                models.User,
+                func.count(models.Artwork.id).label('artwork_count')
+            )
+            .outerjoin(models.Artwork)
+            .group_by(models.User.id)
+            .order_by(models.User.created_at.desc())
+        )
+        users = result.all()
+        
+        return [
+            {
+                "id": user.User.id,
+                "username": user.User.username,
+                "email": user.User.email,
+                "role": user.User.role,
+                "status": user.User.status,
+                "artwork_count": user.artwork_count,
+                "created_at": user.User.created_at
+            }
+            for user in users
+        ]
+    except Exception as e:
+        print(f"Error fetching users: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-@router.put("/users/{user_id}/status")
-async def update_user_status(
-    user_id: int,
-    status: str,
-    db: Session = Depends(get_db),
-    admin: models.User = Depends(get_current_admin)
-):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    user.status = status
-    db.commit()
-    return {"message": f"User status updated to {status}"}
-
-# Enhanced User Management
 @router.put("/users/{user_id}/ban")
 async def ban_user(
     user_id: int,
-    reason: str,
-    db: Session = Depends(get_db),
+    ban_data: dict,
+    db: AsyncSession = Depends(get_db),
     admin: models.User = Depends(get_current_admin)
 ):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.role == "admin":
-        raise HTTPException(status_code=400, detail="Cannot ban admin users")
-    
-    user.status = "banned"
-    user.ban_reason = reason
-    
-    # Log the action
-    await log_moderation(
-        db=db,
-        admin_id=admin.id,
-        action="ban_user",
-        target_type="user",
-        target_id=user_id,
-        reason=reason
-    )
-    
-    db.commit()
-    return {"message": f"User {user.username} has been banned"}
+    try:
+        user = await db.get(models.User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user.status = "banned"
+        user.ban_reason = ban_data.get("reason")
+        await db.commit()
+        
+        # Log the moderation action
+        log = models.ModerationLog(
+            admin_id=admin.id,
+            action="ban_user",
+            target_id=user.id,
+            reason=ban_data.get("reason")
+        )
+        db.add(log)
+        await db.commit()
+        
+        return {"message": "User banned successfully"}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/users/{user_id}/unban")
 async def unban_user(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     admin: models.User = Depends(get_current_admin)
 ):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    user.status = "active"
-    user.ban_reason = None
-    db.commit()
-    return {"message": f"User {user.username} has been unbanned"}
+    try:
+        user = await db.get(models.User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user.status = "active"
+        user.ban_reason = None
+        await db.commit()
+        
+        # Log the moderation action
+        log = models.ModerationLog(
+            admin_id=admin.id,
+            action="unban_user",
+            target_id=user.id
+        )
+        db.add(log)
+        await db.commit()
+        
+        return {"message": "User unbanned successfully"}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        user = await db.get(models.User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        await db.delete(user)
+        await db.commit()
+        
+        # Log the moderation action
+        log = models.ModerationLog(
+            admin_id=admin.id,
+            action="delete_user",
+            target_id=user_id
+        )
+        db.add(log)
+        await db.commit()
+        
+        return {"message": "User deleted successfully"}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Content Moderation
 @router.put("/artworks/{artwork_id}/feature")
@@ -166,23 +226,70 @@ async def moderate_comment(
 
 # Analytics
 @router.get("/stats")
-async def get_stats(
-    db: Session = Depends(get_db),
+async def get_admin_stats(
+    db: AsyncSession = Depends(get_db),
     admin: models.User = Depends(get_current_admin)
 ):
-    total_users = db.query(models.User).count()
-    total_artists = db.query(models.User).filter(models.User.role == "artist").count()
-    total_artworks = db.query(models.Artwork).count()
-    total_likes = db.query(models.Like).count()
-    total_comments = db.query(models.Comment).count()
-    
-    return {
-        "total_users": total_users,
-        "total_artists": total_artists,
-        "total_artworks": total_artworks,
-        "total_likes": total_likes,
-        "total_comments": total_comments
-    }
+    try:
+        # Basic stats
+        total_users = await db.scalar(select(func.count(models.User.id)))
+        total_artworks = await db.scalar(select(func.count(models.Artwork.id)))
+        active_artists = await db.scalar(
+            select(func.count(models.User.id))
+            .where(models.User.role == "artist")
+        )
+        total_categories = await db.scalar(select(func.count(models.Category.id)))
+        
+        # Get user activity data (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        activity_data = await db.execute(
+            select(
+                func.date(models.User.created_at).label('date'),
+                func.count(models.User.id).label('count')
+            )
+            .where(models.User.created_at >= seven_days_ago)
+            .group_by(func.date(models.User.created_at))
+            .order_by(text('date'))
+        )
+        activity_results = activity_data.all()
+        
+        # Get category distribution with explicit joins
+        category_data = await db.execute(
+            select(
+                models.Category.name,
+                func.count(models.Artwork.id).label('count')
+            )
+            .select_from(models.Category)
+            .join(models.artwork_categories, models.Category.id == models.artwork_categories.c.category_id, isouter=True)
+            .join(models.Artwork, models.artwork_categories.c.artwork_id == models.Artwork.id, isouter=True)
+            .group_by(models.Category.id, models.Category.name)
+            .order_by(models.Category.name)
+        )
+        category_results = category_data.all()
+
+        print("Debug - Stats:", {
+            "total_users": total_users,
+            "active_artists": active_artists,
+            "total_artworks": total_artworks,
+            "total_categories": total_categories
+        })
+        
+        return {
+            "total_users": total_users or 0,
+            "total_artworks": total_artworks or 0,
+            "active_artists": active_artists or 0,
+            "total_categories": total_categories or 0,
+            "activity_labels": [str(r.date) for r in activity_results],
+            "new_users_data": [r.count for r in activity_results],
+            "category_labels": [r.name for r in category_results],
+            "category_data": [r.count for r in category_results]
+        }
+    except Exception as e:
+        print(f"Error in get_admin_stats: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 # Enhanced Analytics
 @router.get("/stats/detailed")
@@ -263,4 +370,149 @@ async def log_moderation(
     )
     db.add(log)
     db.commit()
-    return log 
+    return log
+
+@router.post("/login")
+async def admin_login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        # Find user by email
+        query = select(models.User).where(models.User.email == form_data.username)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+        
+        if not user or not verify_password(form_data.password, user.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials"
+            )
+            
+        if user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized as admin"
+            )
+            
+        access_token = create_access_token(
+            data={
+                "sub": user.email,
+                "role": user.role,
+                "user_id": user.id
+            }
+        )
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "role": user.role,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username
+            }
+        }
+        
+    except Exception as e:
+        print(f"Admin login error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+# Activity Logs
+@router.get("/activity-logs")
+async def get_activity_logs(
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    logs = await db.scalars(
+        select(models.ModerationLog)
+        .order_by(models.ModerationLog.created_at.desc())
+    )
+    return logs.all()
+
+@router.get("/artworks")
+async def get_admin_artworks(
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    artworks = await db.scalars(
+        select(models.Artwork)
+        .options(joinedload(models.Artwork.artist))
+        .order_by(models.Artwork.created_at.desc())
+    )
+    return artworks.all()
+
+@router.get("/categories")
+async def get_admin_categories(
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        result = await db.execute(
+            select(
+                models.Category,
+                func.count(models.artwork_categories.c.artwork_id).label('artwork_count')
+            )
+            .outerjoin(models.artwork_categories)
+            .group_by(models.Category.id)
+            .order_by(models.Category.name)
+        )
+        categories = result.all()
+        
+        return [
+            {
+                "id": category.Category.id,
+                "name": category.Category.name,
+                "description": category.Category.description,
+                "artwork_count": category.artwork_count
+            }
+            for category in categories
+        ]
+    except Exception as e:
+        print(f"Error fetching categories: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.delete("/artworks/{artwork_id}")
+async def admin_delete_artwork(
+    artwork_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        artwork = await db.get(models.Artwork, artwork_id)
+        if not artwork:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Artwork not found"
+            )
+
+        # Delete the artwork
+        await db.delete(artwork)
+        await db.commit()
+        
+        # Log the moderation action
+        log = models.ModerationLog(
+            admin_id=admin.id,
+            action="delete_artwork",
+            target_type="artwork",
+            target_id=artwork_id,
+            reason="Admin deletion"
+        )
+        db.add(log)
+        await db.commit()
+        
+        return {"message": "Artwork deleted successfully"}
+
+    except Exception as e:
+        await db.rollback()
+        print(f"Error deleting artwork: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        ) 
