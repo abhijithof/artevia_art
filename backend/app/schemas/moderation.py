@@ -17,4 +17,8 @@ class ModerationLog(ModerationLogBase):
     created_at: datetime
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+class ArtworkModeration(BaseModel):
+    action: str  # "delete", "hide", or "restore"
+    reason: str 

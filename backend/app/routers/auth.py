@@ -42,24 +42,34 @@ async def admin_login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
+    # Find user
     result = await db.execute(
         select(models.User).filter(models.User.email == form_data.username)
     )
     user = result.scalar_one_or_none()
     
-    if not user or not verify_password(form_data.password, user.password):
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
     
+    # Check if user is admin
     if user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized. Admin access only."
         )
     
+    # Check if user is active
+    if user.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user"
+        )
+    
     access_token = create_access_token(data={"sub": user.email})
+    
     return {
         "access_token": access_token,
         "token_type": "bearer",

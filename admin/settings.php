@@ -35,7 +35,6 @@ curl_close($curl);
                 <a href="users.php">Users</a>
                 <a href="artworks.php">Artworks</a>
                 <a href="categories.php">Categories</a>
-                <a href="activity.php">Activity Logs</a>
                 <a href="settings.php" class="active">Settings</a>
                 <a href="logout.php">Logout</a>
             </nav>

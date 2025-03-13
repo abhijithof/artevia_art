@@ -13,7 +13,7 @@ from .profile import Profile, ProfileCreate, ProfileUpdate
 from .category import Category, CategoryCreate
 from .social import Like, Comment, CommentCreate
 from .discovery import Discovery, DiscoveryCreate
-from .moderation import ModerationLog, ModerationLogCreate
+from .moderation import ModerationLog, ModerationLogCreate, ArtworkModeration
 
 __all__ = [
     'User', 'UserCreate', 'UserUpdate', 'UserInDB', 'UserProfile',
@@ -24,5 +24,5 @@ __all__ = [
     'Category', 'CategoryCreate',
     'Like', 'Comment', 'CommentCreate',
     'Discovery', 'DiscoveryCreate',
-    'ModerationLog', 'ModerationLogCreate'
+    'ModerationLog', 'ModerationLogCreate', 'ArtworkModeration'
 ] 

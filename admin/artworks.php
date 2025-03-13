@@ -144,11 +144,16 @@ if ($artworks === null || $categories === null) {
         if (!confirm('Are you sure you want to delete this artwork?')) return;
         
         try {
-            const response = await fetch(`http://localhost:8000/artworks/${id}`, {
-                method: 'DELETE',
+            const response = await fetch(`http://localhost:8000/admin/artworks/${id}/moderate`, {
+                method: 'PUT',
                 headers: {
-                    'Authorization': 'Bearer <?= $_SESSION['admin_token'] ?>'
-                }
+                    'Authorization': 'Bearer <?= $_SESSION['admin_token'] ?>',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: "delete",
+                    reason: "Deleted by admin"
+                })
             });
             
             if (response.ok) {

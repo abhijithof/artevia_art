@@ -41,7 +41,6 @@ if ($categories === null) {
                 <a href="users.php">Users</a>
                 <a href="artworks.php">Artworks</a>
                 <a href="categories.php" class="active">Categories</a>
-                <a href="activity.php">Activity Logs</a>
                 <a href="logout.php">Logout</a>
             </nav>
         </div>

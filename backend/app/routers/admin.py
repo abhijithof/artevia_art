@@ -126,31 +126,37 @@ async def feature_artwork(
 @router.put("/artworks/{artwork_id}/moderate")
 async def moderate_artwork(
     artwork_id: int,
-    action: str,  # "hide", "restore", or "delete"
-    reason: str,
-    db: Session = Depends(get_db),
-    admin: models.User = Depends(get_current_admin)
+    moderation: schemas.ArtworkModeration,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user)
 ):
-    artwork = db.query(models.Artwork).filter(models.Artwork.id == artwork_id).first()
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    result = await db.execute(
+        select(models.Artwork).where(models.Artwork.id == artwork_id)
+    )
+    artwork = result.scalar_one_or_none()
+    
     if not artwork:
         raise HTTPException(status_code=404, detail="Artwork not found")
     
-    if action == "hide":
+    if moderation.action == "delete":
+        await db.delete(artwork)
+        await db.commit()
+        return {"message": "Artwork deleted"}
+    elif moderation.action == "hide":
         artwork.status = "hidden"
-        artwork.moderation_reason = reason
-        message = "Artwork hidden"
-    elif action == "restore":
+        artwork.moderation_reason = moderation.reason
+        await db.commit()
+        return {"message": "Artwork hidden"}
+    elif moderation.action == "restore":
         artwork.status = "active"
         artwork.moderation_reason = None
-        message = "Artwork restored"
-    elif action == "delete":
-        db.delete(artwork)
-        message = "Artwork deleted"
+        await db.commit()
+        return {"message": "Artwork restored"}
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
-    
-    db.commit()
-    return {"message": message}
 
 # Comment Moderation
 @router.put("/comments/{comment_id}/moderate")
@@ -190,7 +196,7 @@ async def get_stats(
     
     # Get total users (including all statuses)
     result = await db.execute(
-        select(func.count(models.User.id))
+        select(func.count())
         .select_from(models.User)
     )
     total_users = result.scalar()
@@ -682,34 +688,6 @@ async def list_categories(
             "artwork_count": int(artwork_count) if artwork_count else 0
         }
         for category, artwork_count in categories
-    ]
-
-@router.get("/activity-logs")
-async def get_activity_logs(
-    db: AsyncSession = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user)
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    stmt = (
-        select(models.ActivityLog)
-        .order_by(models.ActivityLog.timestamp.desc())
-    )
-    
-    result = await db.execute(stmt)
-    logs = result.scalars().all()
-    
-    return [
-        {
-            "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            "user_email": log.user_email,
-            "action": log.action,
-            "details": log.details,
-            "ip_address": log.ip_address,
-            "level": log.level
-        }
-        for log in logs
     ]
 
 @router.delete("/users/{user_id}")
