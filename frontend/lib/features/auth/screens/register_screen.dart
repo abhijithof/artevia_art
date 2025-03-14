@@ -62,13 +62,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
         title: const Text('Register'),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40.0),
+                  child: Image.asset(
+                    'assets/LOGO.png',
+                    width: 200,
+                    height: 100,
+                    fit: BoxFit.contain,
+                  ),
+                ),
                 CustomTextField(
                   label: 'Email',
                   controller: _emailController,
