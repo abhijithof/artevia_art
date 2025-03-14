@@ -8,6 +8,10 @@ from typing import Optional, List
 from sqlalchemy import or_
 import aiofiles
 import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
+from . import models
+from PIL import Image
+import io
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -95,3 +99,5 @@ async def save_uploaded_file(upload_file: UploadFile) -> str:
     except Exception as e:
         print(f"Error saving file: {str(e)}")
         return None 
+
+# Remove the log_activity function if it exists 

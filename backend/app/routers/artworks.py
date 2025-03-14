@@ -35,8 +35,12 @@ PREDEFINED_CATEGORIES = [
 @router.get("/categories")
 async def get_categories(db: AsyncSession = Depends(get_db)):
     try:
-        # For now, just return predefined categories
-        return PREDEFINED_CATEGORIES
+        result = await db.execute(
+            select(models.Category)
+            .order_by(models.Category.name)
+        )
+        categories = result.scalars().all()
+        return [category.name for category in categories]
     except Exception as e:
         print(f"Error getting categories: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -48,36 +52,50 @@ async def get_current_user_or_none(
     return current_user
 
 # CRUD Operations
-@router.post("/", response_model=ArtworkResponse)
+@router.post("/", response_model=schemas.ArtworkResponse)
 async def create_artwork(
     title: str = Form(...),
     description: str = Form(...),
     latitude: float = Form(...),
     longitude: float = Form(...),
+    category_id: str = Form(...),
     image: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
-        # Just save the image, no complex validation
-        image_path = await save_uploaded_file(image)
+        # Save image first
+        image_url = await save_uploaded_file(image)
         
         # Create new artwork
         new_artwork = models.Artwork(
             title=title,
             description=description,
-            image_url=image_path,
+            image_url=image_url,
             latitude=latitude,
             longitude=longitude,
             artist_id=current_user.id,
             status="active"
         )
         
-        db.add(new_artwork)
-        await db.commit()
-        await db.refresh(new_artwork)
+        # Get category by name
+        result = await db.execute(
+            select(models.Category).where(
+                models.Category.name == category_id
+            )
+        )
+        category = result.scalar_one_or_none()
         
-        return {
+        # Add artwork and its category
+        db.add(new_artwork)
+        if category:
+            new_artwork.categories.append(category)
+        
+        # Commit changes
+        await db.commit()
+        
+        # Create response
+        response = {
             "id": new_artwork.id,
             "title": new_artwork.title,
             "description": new_artwork.description,
@@ -85,15 +103,21 @@ async def create_artwork(
             "latitude": new_artwork.latitude,
             "longitude": new_artwork.longitude,
             "artist_id": new_artwork.artist_id,
-            "artist_name": current_user.username,
             "status": new_artwork.status,
-            "is_featured": new_artwork.is_featured,
+            "is_featured": False,
             "created_at": new_artwork.created_at,
-            "categories": []
+            "categories": [category.name for category in new_artwork.categories]
         }
+        
+        # Explicitly close the session
+        await db.close()
+        
+        return response
+
     except Exception as e:
+        print(f"Error creating artwork: {str(e)}")
         await db.rollback()
-        print(f"Error creating artwork: {e}")
+        await db.close()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

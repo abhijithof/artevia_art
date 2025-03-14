@@ -4,6 +4,7 @@ import '../models/artwork_model.dart';
 import '../models/comment_model.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:io';
+import '../models/category_model.dart';
 
 
 class ArtworkService {
@@ -145,7 +146,7 @@ class ArtworkService {
     }
   }
 
-  Future<List<String>> getCategories() async {
+  Future<List<ArtworkCategory>> getCategories() async {
     try {
       final response = await _dio.get(
         '/artworks/categories',
@@ -156,7 +157,7 @@ class ArtworkService {
 
       if (response.statusCode == 200) {
         final List<dynamic> categoriesJson = response.data;
-        return categoriesJson.map((c) => c.toString()).toList();
+        return categoriesJson.map((json) => ArtworkCategory.fromJson(json)).toList();
       }
       throw Exception('Failed to load categories');
     } catch (e) {
@@ -165,21 +166,23 @@ class ArtworkService {
     }
   }
 
-  Future<void> createArtwork(FormData formData) async {
+  Future<Map<String, dynamic>> createArtwork(FormData formData) async {
     try {
       final response = await _dio.post(
         '/artworks/',
         data: formData,
         options: Options(
           headers: {
-            if (authToken != null) 'Authorization': 'Bearer $authToken',
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'multipart/form-data',
           },
         ),
       );
-      
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Failed to create artwork: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return response.data;
       }
+      throw Exception('Failed to create artwork');
     } catch (e) {
       print('Error creating artwork: $e');
       rethrow;

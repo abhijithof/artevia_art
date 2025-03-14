@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from .. import models, schemas
@@ -136,15 +136,6 @@ async def delete_user(
             raise HTTPException(status_code=404, detail="User not found")
             
         await db.delete(user)
-        await db.commit()
-        
-        # Log the moderation action
-        log = models.ModerationLog(
-            admin_id=admin.id,
-            action="delete_user",
-            target_id=user_id
-        )
-        db.add(log)
         await db.commit()
         
         return {"message": "User deleted successfully"}
@@ -421,29 +412,45 @@ async def admin_login(
             detail=str(e)
         )
 
-# Activity Logs
-@router.get("/activity-logs")
-async def get_activity_logs(
-    db: AsyncSession = Depends(get_db),
-    admin: models.User = Depends(get_current_admin)
-):
-    logs = await db.scalars(
-        select(models.ModerationLog)
-        .order_by(models.ModerationLog.created_at.desc())
-    )
-    return logs.all()
-
 @router.get("/artworks")
 async def get_admin_artworks(
     db: AsyncSession = Depends(get_db),
     admin: models.User = Depends(get_current_admin)
 ):
-    artworks = await db.scalars(
-        select(models.Artwork)
-        .options(joinedload(models.Artwork.artist))
-        .order_by(models.Artwork.created_at.desc())
-    )
-    return artworks.all()
+    try:
+        result = await db.execute(
+            select(models.Artwork)
+            .options(
+                joinedload(models.Artwork.artist),
+                joinedload(models.Artwork.categories)
+            )
+            .order_by(models.Artwork.created_at.desc())
+        )
+        artworks = result.unique().scalars().all()
+        
+        return [
+            {
+                "id": artwork.id,
+                "title": artwork.title,
+                "description": artwork.description,
+                "image_url": artwork.image_url,
+                "latitude": artwork.latitude,
+                "longitude": artwork.longitude,
+                "artist_id": artwork.artist_id,
+                "artist_name": artwork.artist.username if artwork.artist else "Unknown",
+                "status": artwork.status,
+                "is_featured": artwork.is_featured,
+                "created_at": artwork.created_at,
+                "categories": [{"id": c.id, "name": c.name} for c in artwork.categories]
+            }
+            for artwork in artworks
+        ]
+    except Exception as e:
+        print(f"Error fetching artworks: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 @router.get("/categories")
 async def get_admin_categories(
@@ -478,6 +485,50 @@ async def get_admin_categories(
             detail=str(e)
         )
 
+@router.post("/categories")
+async def create_admin_category(
+    name: str = Form(...),
+    description: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        new_category = models.Category(
+            name=name,
+            description=description
+        )
+        db.add(new_category)
+        await db.commit()
+        await db.refresh(new_category)
+        
+        return {
+            "id": new_category.id,
+            "name": new_category.name,
+            "description": new_category.description,
+            "artwork_count": 0
+        }
+    except Exception as e:
+        await db.rollback()
+        print(f"Error creating category: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/categories/{category_id}")
+async def get_category(
+    category_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        category = await db.get(models.Category, category_id)
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        return category
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/artworks/{artwork_id}")
 async def admin_delete_artwork(
     artwork_id: int,
@@ -496,22 +547,62 @@ async def admin_delete_artwork(
         await db.delete(artwork)
         await db.commit()
         
-        # Log the moderation action
-        log = models.ModerationLog(
-            admin_id=admin.id,
-            action="delete_artwork",
-            target_type="artwork",
-            target_id=artwork_id,
-            reason="Admin deletion"
-        )
-        db.add(log)
-        await db.commit()
-        
         return {"message": "Artwork deleted successfully"}
 
     except Exception as e:
         await db.rollback()
         print(f"Error deleting artwork: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.put("/categories/{category_id}")
+async def update_category(
+    category_id: int,
+    category_data: schemas.CategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        category = await db.get(models.Category, category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Category not found"
+            )
+        
+        category.name = category_data.name
+        category.description = category_data.description
+        await db.commit()
+        await db.refresh(category)
+        return category
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.delete("/categories/{category_id}")
+async def delete_category(
+    category_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin: models.User = Depends(get_current_admin)
+):
+    try:
+        category = await db.get(models.Category, category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Category not found"
+            )
+        
+        await db.delete(category)
+        await db.commit()
+        return {"message": "Category deleted successfully"}
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

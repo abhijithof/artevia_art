@@ -1,28 +1,13 @@
 <?php
 session_start();
-if (!isset($_SESSION['admin_token'])) {
-    header("Location: login.php");
-    exit();
-}
+require_once 'utils/api.php';
 
-// Fetch categories from FastAPI
-$curl = curl_init();
-curl_setopt_array($curl, [
-    CURLOPT_URL => 'http://localhost:8000/admin/categories',
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer ' . $_SESSION['admin_token']
-    ]
-]);
+checkAuth();
 
-$response = curl_exec($curl);
-$categories = json_decode($response, true);
-curl_close($curl);
-
-// Check if categories were fetched successfully
-if ($categories === null) {
-    $error = "Error fetching categories";
-    $categories = []; // Initialize as empty array to avoid foreach error
+try {
+    $categories = makeApiRequest('/admin/categories', 'GET', null, $_SESSION['admin_token']);
+} catch (Exception $e) {
+    $error = $e->getMessage();
 }
 ?>
 
@@ -41,7 +26,6 @@ if ($categories === null) {
                 <a href="users.php">Users</a>
                 <a href="artworks.php">Artworks</a>
                 <a href="categories.php" class="active">Categories</a>
-                <a href="activity.php">Activity Logs</a>
                 <a href="logout.php">Logout</a>
             </nav>
         </div>
@@ -79,17 +63,16 @@ if ($categories === null) {
     <div id="addCategoryModal" class="modal">
         <div class="modal-content">
             <h2>Add New Category</h2>
-            <form id="addCategoryForm" onsubmit="submitCategory(event)">
-                <div class="form-group">
+            <form onsubmit="submitCategory(event)">
+                <div>
                     <label>Name</label>
                     <input type="text" name="name" required>
                 </div>
-                <div class="form-group">
+                <div>
                     <label>Description</label>
                     <textarea name="description" required></textarea>
                 </div>
-                <button type="submit" class="add-button">Add Category</button>
-                <button type="button" onclick="closeModal()" class="cancel-button">Cancel</button>
+                <button type="submit">Add Category</button>
             </form>
         </div>
     </div>
@@ -127,19 +110,15 @@ if ($categories === null) {
     async function submitCategory(event) {
         event.preventDefault();
         const form = event.target;
-        const data = {
-            name: form.name.value,
-            description: form.description.value
-        };
+        const formData = new FormData(form);
 
         try {
-            const response = await fetch('http://localhost:8000/categories', {
+            const response = await fetch('http://localhost:8000/admin/categories', {
                 method: 'POST',
                 headers: {
-                    'Authorization': 'Bearer <?= $_SESSION['admin_token'] ?>',
-                    'Content-Type': 'application/json'
+                    'Authorization': `Bearer <?= $_SESSION['admin_token'] ?>`
                 },
-                body: JSON.stringify(data)
+                body: formData
             });
 
             if (response.ok) {
@@ -156,9 +135,9 @@ if ($categories === null) {
 
     async function editCategory(id) {
         try {
-            const response = await fetch(`http://localhost:8000/categories/${id}`, {
+            const response = await fetch(`/admin/api/categories/${id}`, {
                 headers: {
-                    'Authorization': 'Bearer <?= $_SESSION['admin_token'] ?>'
+                    'Authorization': `Bearer <?= $_SESSION['admin_token'] ?>`
                 }
             });
             const category = await response.json();
@@ -183,10 +162,10 @@ if ($categories === null) {
         };
 
         try {
-            const response = await fetch(`http://localhost:8000/categories/${id}`, {
+            const response = await fetch(`/admin/api/categories/${id}`, {
                 method: 'PUT',
                 headers: {
-                    'Authorization': 'Bearer <?= $_SESSION['admin_token'] ?>',
+                    'Authorization': `Bearer <?= $_SESSION['admin_token'] ?>`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(data)
@@ -205,25 +184,24 @@ if ($categories === null) {
     }
 
     async function deleteCategory(id) {
-        if (confirm('Are you sure you want to delete this category?')) {
-            try {
-                const response = await fetch(`http://localhost:8000/categories/${id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': 'Bearer <?= $_SESSION['admin_token'] ?>'
-                    }
-                });
-
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    const error = await response.json();
-                    alert(error.detail || 'Failed to delete category');
+        if (!confirm('Are you sure you want to delete this category?')) return;
+        
+        try {
+            const response = await fetch(`http://localhost:8000/admin/categories/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer <?= $_SESSION['admin_token'] ?>`
                 }
-            } catch (error) {
-                console.error('Error:', error);
+            });
+            
+            if (response.ok) {
+                location.reload();
+            } else {
                 alert('Failed to delete category');
             }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to delete category');
         }
     }
     </script>

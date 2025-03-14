@@ -9,6 +9,8 @@ from . import models
 from .database import engine, get_db, Base
 from .routers import users, auth, artworks, social, discoveries, categories, admin, profiles
 import os
+from sqlalchemy import select
+from .routers.artworks import PREDEFINED_CATEGORIES
 
 # Initialize FastAPI app
 app = FastAPI(title="Artevia API")
@@ -59,6 +61,25 @@ async def create_tables():
 @app.on_event("startup")
 async def startup_event():
     await create_tables()
+
+# Create async function to create predefined categories
+async def create_predefined_categories():
+    async with AsyncSession(engine) as db:
+        # Check if categories exist
+        result = await db.execute(select(models.Category))
+        existing = result.scalars().all()
+        
+        if not existing:
+            # Create predefined categories
+            for name in PREDEFINED_CATEGORIES:
+                category = models.Category(name=name)
+                db.add(category)
+            await db.commit()
+
+# Create startup event to create predefined categories
+@app.on_event("startup")
+async def startup_event():
+    await create_predefined_categories()
 
 # Basic test route
 @app.get("/")

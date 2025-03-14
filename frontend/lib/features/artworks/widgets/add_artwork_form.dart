@@ -4,13 +4,12 @@ import '../providers/artwork_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'package:http_parser/http_parser.dart' show MediaType;
-
-
+import '../models/category_model.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AddArtworkForm extends StatefulWidget {
   final double latitude;
@@ -32,9 +31,9 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
   final _descriptionController = TextEditingController();
   XFile? _imageFile;
   bool _isLoading = false;
-  String? _selectedCategory;
   bool _imageUploading = false;
-  List<String> _categories = [];
+  List<ArtworkCategory> _categories = [];
+  String? _selectedCategory;
 
   @override
   void initState() {
@@ -46,10 +45,12 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
     try {
       final artworkProvider = context.read<ArtworkProvider>();
       final categories = await artworkProvider.getCategories();
+      print('Loaded categories: $categories');
       setState(() {
         _categories = categories;
       });
     } catch (e) {
+      print('Error loading categories: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error loading categories: $e')),
       );
@@ -147,32 +148,7 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
                 },
               ),
               const SizedBox(height: 16),
-              if (_categories.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  value: _selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
-                  ),
-                  hint: const Text('Select a category'),
-                  items: _categories.map((String category) {
-                    return DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    );
-                  }).toList(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a category';
-                    }
-                    return null;
-                  },
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedCategory = newValue;
-                    });
-                  },
-                ),
+              _buildCategoryDropdown(),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isLoading ? null : _submitForm,
@@ -207,41 +183,97 @@ class _AddArtworkFormState extends State<AddArtworkForm> {
   }
 
   Future<void> _submitForm() async {
-    if (_imageFile != null) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (_formKey.currentState!.validate() && _imageFile != null) {
+      if (_selectedCategory == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a category')),
+        );
+        return;
+      }
+
+      setState(() => _isLoading = true);
       
       try {
-        List<int> bytes = await _imageFile!.readAsBytes();
-        String filename = _imageFile!.name;
-        
-        FormData formData = FormData.fromMap({
-          'title': _titleController.text,
-          'description': _descriptionController.text,
-          'latitude': widget.latitude,
-          'longitude': widget.longitude,
-          'image': MultipartFile.fromBytes(
+        late final MultipartFile imageFile;
+        if (kIsWeb) {
+          final bytes = await _imageFile!.readAsBytes();
+          imageFile = MultipartFile.fromBytes(
             bytes,
-            filename: filename,
-          ),
-        });
+            filename: _imageFile!.name,
+          );
+        } else {
+          imageFile = await MultipartFile.fromFile(
+            _imageFile!.path,
+            filename: _imageFile!.name,
+          );
+        }
 
-        await context.read<ArtworkProvider>().addArtwork(formData, '');
-        
+        final formData = FormData();
+        formData.fields.addAll([
+          MapEntry('title', _titleController.text),
+          MapEntry('description', _descriptionController.text),
+          MapEntry('latitude', widget.latitude.toString()),
+          MapEntry('longitude', widget.longitude.toString()),
+          MapEntry('category_id', _selectedCategory ?? ''),
+        ]);
+
+        formData.files.add(MapEntry('image', imageFile));
+
+        await context.read<ArtworkProvider>().addArtwork(
+          formData,
+          context.read<AuthProvider>().user?.username ?? 'Unknown Artist',
+        );
+
         if (mounted) {
           Navigator.of(context).pop();
         }
       } catch (e) {
-        print('Error in _submitForm: $e');
+        print('Error submitting form: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error creating artwork: $e')),
+          );
+        }
       } finally {
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          setState(() => _isLoading = false);
         }
       }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields and select an image')),
+      );
     }
+  }
+
+  Widget _buildCategoryDropdown() {
+    return DropdownButtonFormField<String>(
+      decoration: const InputDecoration(
+        labelText: 'Category',
+        border: OutlineInputBorder(),
+      ),
+      hint: const Text('Select a category'),
+      value: _selectedCategory,
+      items: _categories.map((category) {
+        return DropdownMenuItem(
+          value: category.name,
+          child: Text(category.name),
+        );
+      }).toList(),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please select a category';
+        }
+        return null;
+      },
+      onChanged: (String? value) {
+        if (value != null) {
+          setState(() {
+            _selectedCategory = value;
+          });
+        }
+      },
+    );
   }
 
   @override
