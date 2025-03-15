@@ -12,6 +12,7 @@ class ArtworkProvider with ChangeNotifier {
   final Dio _dio;
   List<Artwork> _artworks = [];
   List<Artwork> _userArtworks = [];
+  List<ArtworkCategory> _categories = [];
   bool _isLoading = false;
   String? _error;
   Position? _currentPosition;
@@ -26,6 +27,7 @@ class ArtworkProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Artwork> get unlockedArtworks => _unlockedArtworks;
+  List<ArtworkCategory> get categories => _categories;
 
   Future<void> init() async {
     await Future.wait([
@@ -134,9 +136,11 @@ class ArtworkProvider with ChangeNotifier {
 
   Future<List<ArtworkCategory>> getCategories() async {
     try {
-      return await _artworkService.getCategories();
+      _categories = await _artworkService.getCategories();
+      notifyListeners();
+      return _categories;
     } catch (e) {
-      print('Error getting categories: $e');
+      print('Error fetching categories: $e');
       rethrow;
     }
   }
@@ -181,5 +185,16 @@ class ArtworkProvider with ChangeNotifier {
       print('Error fetching unlocked artworks: $_error');
       rethrow;
     }
+  }
+
+  List<Artwork> getFilteredArtworks(String? categoryId, String searchQuery) {
+    return _artworks.where((artwork) {
+      final matchesCategory = categoryId == null || 
+                            artwork.categoryId == categoryId;
+      final matchesSearch = searchQuery.isEmpty || 
+        artwork.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+        artwork.description.toLowerCase().contains(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }).toList();
   }
 } 

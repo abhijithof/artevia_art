@@ -19,11 +19,21 @@ class DiscoveryMap extends StatefulWidget {
 class _DiscoveryMapState extends State<DiscoveryMap> {
   final MapController _mapController = MapController();
   Position? _currentPosition;
+  String _searchQuery = '';
+  String? _selectedCategory;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    context.read<ArtworkProvider>().getCategories();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _getCurrentLocation() async {
@@ -113,10 +123,112 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
     );
   }
 
+  Widget _buildSearchBar() {
+    return Consumer<ArtworkProvider>(
+      builder: (context, provider, _) {
+        return Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Search TextField
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search artworks...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                  ),
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                ),
+              ),
+              // Category Chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: const Text('All'),
+                      selected: _selectedCategory == null,
+                      onSelected: (selected) {
+                        setState(() => _selectedCategory = null);
+                      },
+                      selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
+                      checkmarkColor: Theme.of(context).primaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    ...provider.categories.map((category) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(category.name),
+                        selected: _selectedCategory == category.name,
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategory = selected ? category.name : null;
+                          });
+                        },
+                        selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
+                        checkmarkColor: Theme.of(context).primaryColor,
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: BorderSide(
+                            color: _selectedCategory == category.name 
+                                ? Theme.of(context).primaryColor 
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                      ),
+                    )).toList(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _handleSearch(String value) {
+    setState(() {
+      _searchQuery = value;
+    });
+  }
+
+  void _handleCategorySelect(String? categoryId) {
+    setState(() {
+      _selectedCategory = categoryId;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer2<ArtworkProvider, AuthProvider>(
       builder: (context, artworkProvider, authProvider, _) {
+        final filteredArtworks = _getFilteredArtworks(artworkProvider);
+        
         return Stack(
           children: [
             FlutterMap(
@@ -133,29 +245,22 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
                   userAgentPackageName: 'com.artevia.app',
                 ),
                 MarkerLayer(
-                  markers: [
-                    if (_currentPosition != null)
-                      Marker(
-                        width: 40,
-                        height: 40,
-                        point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                        child: const Icon(
-                          Icons.my_location,
-                          color: Colors.blue,
-                          size: 40,
-                        ),
-                      ),
-                    ...artworkProvider.artworks.map((artwork) {
-                      return Marker(
-                        width: 40,
-                        height: 40,
-                        point: LatLng(artwork.latitude, artwork.longitude),
-                        child: _buildArtworkMarker(artwork, authProvider),
-                      );
-                    }).toList(),
-                  ],
+                  markers: filteredArtworks.map((artwork) => 
+                    Marker(
+                      width: 40,
+                      height: 40,
+                      point: LatLng(artwork.latitude, artwork.longitude),
+                      child: _buildArtworkMarker(artwork, authProvider),
+                    )
+                  ).toList(),
                 ),
               ],
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildSearchBar(),
             ),
             Positioned(
               left: 16,
@@ -226,5 +331,16 @@ class _DiscoveryMapState extends State<DiscoveryMap> {
         longitude: _currentPosition!.longitude,
       ),
     );
+  }
+
+  List<Artwork> _getFilteredArtworks(ArtworkProvider provider) {
+    return provider.artworks.where((artwork) {
+      final matchesCategory = _selectedCategory == null || 
+                            artwork.categories.contains(_selectedCategory);
+      final matchesSearch = _searchQuery.isEmpty || 
+        artwork.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        artwork.description.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }).toList();
   }
 } 

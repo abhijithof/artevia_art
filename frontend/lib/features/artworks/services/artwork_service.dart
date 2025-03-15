@@ -156,8 +156,14 @@ class ArtworkService {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> categoriesJson = response.data;
-        return categoriesJson.map((json) => ArtworkCategory.fromJson(json)).toList();
+        if (response.data is List) {
+          return (response.data as List)
+              .map((item) => item is String 
+                  ? ArtworkCategory.fromString(item)
+                  : ArtworkCategory.fromJson(item as Map<String, dynamic>))
+              .toList();
+        }
+        throw Exception('Invalid response format');
       }
       throw Exception('Failed to load categories');
     } catch (e) {

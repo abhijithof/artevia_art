@@ -9,6 +9,8 @@ class Artwork {
   final int artistId;
   final bool isUnlocked;
   final double distanceFromUser;
+  final String categoryId;
+  final List<String> categories;
 
   Artwork({
     required this.id,
@@ -21,6 +23,8 @@ class Artwork {
     required this.artistId,
     this.isUnlocked = false,
     this.distanceFromUser = 0,
+    required this.categoryId,
+    this.categories = const [],
   });
 
   bool get canBeUnlocked => distanceFromUser <= 1000;
@@ -36,6 +40,8 @@ class Artwork {
     int? artistId,
     bool? isUnlocked,
     double? distanceFromUser,
+    String? categoryId,
+    List<String>? categories,
   }) {
     return Artwork(
       id: id ?? this.id,
@@ -48,6 +54,8 @@ class Artwork {
       artistId: artistId ?? this.artistId,
       isUnlocked: isUnlocked ?? this.isUnlocked,
       distanceFromUser: distanceFromUser ?? this.distanceFromUser,
+      categoryId: categoryId ?? this.categoryId,
+      categories: categories ?? this.categories,
     );
   }
 
@@ -73,6 +81,8 @@ class Artwork {
           : json['artist_id'],
       isUnlocked: isUnlocked || json['is_unlocked'] ?? false,
       distanceFromUser: distanceFromUser,
+      categoryId: json['category_id'].toString(),
+      categories: List<String>.from(json['categories'] ?? []),
     );
   }
 }

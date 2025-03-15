@@ -429,6 +429,25 @@ class _ArtworkDetailCardState extends State<ArtworkDetailCard> {
                         ),
                       ),
 
+                      // Add categories display after the title
+                      if (widget.artwork.categories.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Wrap(
+                            spacing: 8,
+                            children: widget.artwork.categories.map((category) => 
+                              Chip(
+                                label: Text(
+                                  category,
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                backgroundColor: Colors.grey[200],
+                                padding: EdgeInsets.symmetric(horizontal: 8),
+                              )
+                            ).toList(),
+                          ),
+                        ),
+
                       // Only show these if unlocked or user's artwork
                       if (canViewContent) ...[
                         Padding(

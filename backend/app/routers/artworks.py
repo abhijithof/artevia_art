@@ -58,7 +58,7 @@ async def create_artwork(
     description: str = Form(...),
     latitude: float = Form(...),
     longitude: float = Form(...),
-    category_id: str = Form(...),
+    category_id: str = Form(...),  # This is actually the category name from frontend
     image: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
@@ -66,6 +66,16 @@ async def create_artwork(
     try:
         # Save image first
         image_url = await save_uploaded_file(image)
+        
+        # Get category by name (fixed query)
+        result = await db.execute(
+            select(models.Category)
+            .where(models.Category.name.ilike(category_id))  # Using ilike for case-insensitive matching
+        )
+        category = result.scalar_one_or_none()
+        
+        if not category:
+            raise HTTPException(status_code=400, detail="Invalid category")
         
         # Create new artwork
         new_artwork = models.Artwork(
@@ -78,24 +88,14 @@ async def create_artwork(
             status="active"
         )
         
-        # Get category by name
-        result = await db.execute(
-            select(models.Category).where(
-                models.Category.name == category_id
-            )
-        )
-        category = result.scalar_one_or_none()
-        
         # Add artwork and its category
         db.add(new_artwork)
-        if category:
-            new_artwork.categories.append(category)
+        new_artwork.categories.append(category)
         
-        # Commit changes
         await db.commit()
+        await db.refresh(new_artwork)
         
-        # Create response
-        response = {
+        return {
             "id": new_artwork.id,
             "title": new_artwork.title,
             "description": new_artwork.description,
@@ -106,22 +106,12 @@ async def create_artwork(
             "status": new_artwork.status,
             "is_featured": False,
             "created_at": new_artwork.created_at,
-            "categories": [category.name for category in new_artwork.categories]
+            "categories": [c.name for c in new_artwork.categories]
         }
-        
-        # Explicitly close the session
-        await db.close()
-        
-        return response
 
     except Exception as e:
-        print(f"Error creating artwork: {str(e)}")
         await db.rollback()
-        await db.close()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{artwork_id}", response_model=schemas.ArtworkResponse)
 async def update_artwork(
